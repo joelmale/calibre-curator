@@ -1,0 +1,12 @@
+/* Design tokens — override to re-theme the AI dashboard */
+:root {
+  --ai-color-primary: #337ab7;     /* Bootstrap 3 primary */
+  --ai-color-surface: #ffffff;
+  --ai-color-border: #dddddd;
+  --ai-color-text: #333333;
+  --ai-color-text-muted: #777777;
+  --ai-radius: 4px;
+  --ai-spacing-sm: 8px;
+  --ai-spacing-md: 16px;
+  --ai-spacing-lg: 24px;
+}

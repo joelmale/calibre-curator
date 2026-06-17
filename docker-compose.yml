@@ -1,0 +1,98 @@
+name: calibre-ai-stack
+
+networks:
+  public_net:
+    driver: bridge
+  ai_internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  calibre_web_config:
+  ai_sidecar_state:
+  ollama_models:
+
+services:
+  calibre-web:
+    build:
+      context: ./calibre-web-fork
+      dockerfile: Dockerfile
+    container_name: calibre-web
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "America/New_York"
+      AI_SIDECAR_ENABLED: "true"
+      AI_SIDECAR_BASE_URL: "http://ai-sidecar:8090"
+      AI_SIDECAR_SHARED_TOKEN: "${AI_SIDECAR_SHARED_TOKEN}"
+    volumes:
+      - calibre_web_config:/config
+      - /srv/books/calibre-library:/books
+    ports:
+      - "8083:8083"
+    networks:
+      - public_net
+      - ai_internal
+    depends_on:
+      ai-sidecar:
+        condition: service_healthy
+
+  ai-sidecar:
+    build:
+      context: ./ai-sidecar
+      dockerfile: Dockerfile
+    container_name: calibre-ai-sidecar
+    restart: unless-stopped
+    environment:
+      TZ: "America/New_York"
+      APP_ENV: "production"
+      LISTEN_HOST: "0.0.0.0"
+      LISTEN_PORT: "8090"
+      CALIBRE_LIBRARY_ROOT: "/calibre-library"
+      CALIBRE_METADATA_DB: "/calibre-library/metadata.db"
+      SIDECAR_DB_PATH: "/state/ai_sidecar.sqlite3"
+      VECTOR_BACKEND: "chroma"
+      CHROMA_PERSIST_DIR: "/state/chroma"
+      EMBEDDING_PROVIDER: "ollama"
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      OLLAMA_EMBED_MODEL: "nomic-embed-text"
+      AI_SIDECAR_SHARED_TOKEN: "${AI_SIDECAR_SHARED_TOKEN}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_EMBED_MODEL: "text-embedding-3-small"
+      SCAN_INTERVAL_SECONDS: "300"
+      MAX_EXTRACTED_CHARS_PER_BOOK: "120000"
+    volumes:
+      - /srv/books/calibre-library:/calibre-library:ro
+      - ai_sidecar_state:/state
+    expose:
+      - "8090"
+    networks:
+      - ai_internal
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8090/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      ollama:
+        condition: service_started
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    expose:
+      - "11434"
+    networks:
+      - ai_internal
+    # Uncomment if GPU is available:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: ["gpu"]

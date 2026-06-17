@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+
+{% block header %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ai/ai-dashboard.css') }}">
+{% endblock %}
+
+{% block body %}
+<div id="ai-curation-root"
+     data-api-base="{{ url_for('ai_bridge.proxy_api', subpath='') }}">
+  <noscript>
+    <div class="alert alert-warning">
+      AI Curation requires JavaScript to be enabled.
+    </div>
+  </noscript>
+</div>
+{% endblock %}
+
+{% block js %}
+{{ super() }}
+<script type="module" src="{{ url_for('static', filename='ai/ai-dashboard.js') }}"></script>
+{% endblock %}
