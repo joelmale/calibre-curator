@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify
 
+import requests
+
 from ..config import get_config
 from ..db.calibre_reader import CalibreReader
 from ..db.repositories import IngestionRunRepository
@@ -39,6 +41,32 @@ def get_status():
         else config.openai_embed_model
     )
 
+    # Quick reachability probe: check Ollama /api/tags to see if the model is available
+    embedding_ok = True
+    embedding_warning: str | None = None
+    if config.embedding_provider == "ollama":
+        try:
+            resp = requests.get(
+                f"{config.ollama_base_url}/api/tags", timeout=3
+            )
+            if resp.ok:
+                available = [m["name"] for m in resp.json().get("models", [])]
+                short_name = embedding_model.split(":")[0]
+                if not any(
+                    m == embedding_model or m.startswith(short_name + ":")
+                    for m in available
+                ):
+                    embedding_ok = False
+                    embedding_warning = (
+                        f"Model '{embedding_model}' is not pulled. "
+                        f"Run: ollama pull {embedding_model}"
+                    )
+            else:
+                embedding_warning = f"Ollama unreachable ({resp.status_code})"
+        except Exception as exc:
+            embedding_ok = False
+            embedding_warning = f"Cannot reach Ollama: {exc}"
+
     return jsonify({
         "library": {
             "metadataDbReadable": db_readable,
@@ -49,6 +77,8 @@ def get_status():
         "embedding": {
             "provider": config.embedding_provider,
             "model":    embedding_model,
+            "ok":       embedding_ok,
+            "warning":  embedding_warning,
         },
         "lastIngestionRun": last_run,
     })

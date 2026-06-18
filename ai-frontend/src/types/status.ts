@@ -18,6 +18,8 @@ export interface ILibraryIndexStatus {
 export interface IEmbeddingStatus {
   readonly provider: "ollama" | "openai" | "disabled";
   readonly model: string;
+  readonly ok: boolean;
+  readonly warning: string | null;
 }
 
 export interface IIngestionRunStatus {

@@ -44,6 +44,14 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
             return self._embed_batch(texts)
         except requests.HTTPError as exc:
             if exc.response is not None and exc.response.status_code == 404:
+                body = exc.response.text or ""
+                # Model-not-found 404s contain "not found" or "try pulling"
+                if "not found" in body or "try pulling" in body or "pull" in body.lower():
+                    raise RuntimeError(
+                        f"Embedding model '{self._model}' is not available in Ollama. "
+                        f"Run: ollama pull {self._model}"
+                    ) from exc
+                # Endpoint-not-found 404 → fall back to legacy single-text endpoint
                 logger.info("Ollama /api/embed not found, switching to legacy endpoint")
                 self._use_legacy = True
                 return self._embed_legacy(texts)
@@ -70,6 +78,13 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
                 json={"model": self._model, "prompt": text},
                 timeout=60,
             )
+            if resp.status_code == 404:
+                body = resp.text or ""
+                if "not found" in body or "pull" in body.lower():
+                    raise RuntimeError(
+                        f"Embedding model '{self._model}' is not available in Ollama. "
+                        f"Run: ollama pull {self._model}"
+                    )
             resp.raise_for_status()
             results.append(resp.json()["embedding"])
         return results

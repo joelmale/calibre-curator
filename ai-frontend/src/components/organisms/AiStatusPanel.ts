@@ -36,9 +36,14 @@ export function createAiStatusPanel(s: IAiStatusResponse): HTMLElement {
   const modelCode = document.createElement("code");
   modelCode.textContent = s.embedding.model;
 
+  const statusBadge = document.createElement("span");
+  statusBadge.className = `label ${s.embedding.ok ? "label-success" : "label-danger"}`;
+  statusBadge.textContent = s.embedding.ok ? "Ready" : "Not available";
+
   const embeddingRows: ReadonlyArray<readonly [string, HTMLElement | string]> = [
     ["Provider", providerCode],
     ["Model", modelCode],
+    ["Status", statusBadge],
   ];
 
   const embeddingTable = createAiStatusTable(embeddingRows);
@@ -54,6 +59,13 @@ export function createAiStatusPanel(s: IAiStatusResponse): HTMLElement {
 
   const embFrag = document.createDocumentFragment();
   embFrag.appendChild(embeddingTable);
+  if (s.embedding.warning) {
+    const warn = document.createElement("div");
+    warn.className = "alert alert-warning";
+    warn.style.margin = "8px";
+    warn.textContent = s.embedding.warning;
+    embFrag.appendChild(warn);
+  }
   embFrag.appendChild(runEl);
   const embContainer = document.createElement("div");
   embContainer.appendChild(embFrag);
