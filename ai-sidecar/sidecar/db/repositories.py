@@ -129,6 +129,61 @@ class FormatAiRepository:
                 extraction_error    = NULL
         """, (calibre_book_id, fmt, relative_path, file_size_bytes, mtime_ns))
 
+    @staticmethod
+    def mark_extraction(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+        fmt: str,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        conn.execute("""
+            UPDATE book_formats_ai
+            SET extraction_status = ?,
+                extraction_error  = ?,
+                extracted_at      = ?
+            WHERE calibre_book_id = ? AND format = ?
+        """, (status, error, _now(), calibre_book_id, fmt))
+
+
+class ChunkRepository:
+    @staticmethod
+    def delete_for_book(conn: sqlite3.Connection, calibre_book_id: int) -> None:
+        conn.execute(
+            "DELETE FROM book_chunks WHERE calibre_book_id = ?",
+            (calibre_book_id,),
+        )
+
+    @staticmethod
+    def insert_batch(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+        source_type: str,
+        chunks: list,
+    ) -> None:
+        now = _now()
+        conn.executemany("""
+            INSERT INTO book_chunks (
+                calibre_book_id, chunk_uid, source_type,
+                chunk_index, heading, text, token_estimate,
+                char_start, char_end, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (
+                calibre_book_id,
+                c.chunk_uid,
+                source_type,
+                c.chunk_index,
+                c.heading,
+                c.text,
+                c.token_estimate,
+                c.char_start,
+                c.char_end,
+                now,
+            )
+            for c in chunks
+        ])
+
 
 class IngestionRunRepository:
     @staticmethod

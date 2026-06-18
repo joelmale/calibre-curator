@@ -5,9 +5,11 @@ import threading
 
 from ..config import get_config
 from ..db.calibre_reader import CalibreReader
-from ..db.repositories import BookAiRepository, FormatAiRepository, IngestionRunRepository
+from ..db.repositories import BookAiRepository, ChunkRepository, FormatAiRepository, IngestionRunRepository
 from ..db.session import get_db
-from .scanner import compute_metadata_hash, compute_formats_hash, detect_changed_books
+from .chunker import chunk_text
+from .extractor import extract_text
+from .scanner import compute_formats_hash, compute_metadata_hash, detect_changed_books
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ def is_running() -> bool:
 
 
 def run_pipeline_once(run_id: int | None = None) -> None:
-    """Scan Calibre metadata.db, detect changes, and update the sidecar index.
+    """Scan Calibre metadata.db, extract text, chunk, and update the sidecar index.
 
     Safe to call from both the APScheduler background job and the API endpoint.
     Concurrent calls are no-ops (returns immediately if already running).
@@ -68,16 +70,21 @@ def _do_run(run_id: int | None) -> None:
             if removed:
                 logger.info("Removed %d stale book(s) from index", removed)
 
-            # Upsert changed/new books
             for record in changed_records:
                 try:
                     meta_hash = compute_metadata_hash(record)
                     fmt_hash = compute_formats_hash(record)
 
                     BookAiRepository.upsert(conn, record, meta_hash, fmt_hash)
+                    BookAiRepository.mark_status(conn, record.book_id, "extracting")
+
+                    # Delete stale chunks so re-extraction is clean
+                    ChunkRepository.delete_for_book(conn, record.book_id)
+
+                    best_text = ""
+                    best_source = ""
 
                     for fmt_info in record.format_details:
-                        # Calibre file path: {library_root}/{book.path}/{data.name}.{format}
                         relative_path = (
                             f"{record.path}/{fmt_info.name}.{fmt_info.format.lower()}"
                         )
@@ -89,11 +96,46 @@ def _do_run(run_id: int | None) -> None:
                             file_size_bytes=fmt_info.uncompressed_size,
                         )
 
+                        result = extract_text(
+                            library_root=config.calibre_library_root,
+                            relative_path=relative_path,
+                            fmt=fmt_info.format,
+                            max_chars=config.max_extracted_chars_per_book,
+                        )
+
+                        FormatAiRepository.mark_extraction(
+                            conn,
+                            calibre_book_id=record.book_id,
+                            fmt=fmt_info.format,
+                            status="extracted" if result.ok else "failed",
+                            error=result.error,
+                        )
+
+                        # Prefer the format with the most text
+                        if result.ok and len(result.text) > len(best_text):
+                            best_text = result.text
+                            best_source = result.source
+
+                    if best_text.strip():
+                        chunks = chunk_text(best_text, record.book_id)
+                        ChunkRepository.insert_batch(
+                            conn, record.book_id, best_source, chunks
+                        )
+                        logger.debug(
+                            "Book %d: extracted %d chars → %d chunks",
+                            record.book_id, len(best_text), len(chunks),
+                        )
+                        BookAiRepository.mark_status(conn, record.book_id, "chunked")
+                    else:
+                        BookAiRepository.mark_status(
+                            conn, record.book_id, "failed", "no extractable text"
+                        )
+
                     changed += 1
 
                 except Exception as exc:
                     logger.error(
-                        "Failed to index book %d (%s): %s",
+                        "Failed to process book %d (%s): %s",
                         record.book_id, record.title, exc,
                     )
                     BookAiRepository.mark_status(
