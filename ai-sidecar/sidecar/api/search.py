@@ -10,6 +10,7 @@ from ..db.session import get_db
 from ..embeddings import get_embedding_provider
 from ..security import require_bearer_token
 from ..vectors import get_vector_store
+from ._coverage import get_index_coverage
 
 search_bp = Blueprint("search", __name__)
 
@@ -47,9 +48,14 @@ def semantic_search():
     try:
         provider = get_embedding_provider(config)
         store = get_vector_store(config, provider.model_name)
-        query_vec = provider.embed([query])[0]
-        # Fetch more than needed so we can deduplicate by book
-        raw = store.search(query_vec, n_results=limit * 3)
+        query_vec = provider.embed_query([query])[0]
+        # Fetch more than needed so we can deduplicate by book;
+        # apply the relevance threshold so irrelevant results are dropped.
+        raw = store.search(
+            query_vec,
+            n_results=limit * 3,
+            max_distance=config.search_max_distance,
+        )
     except Exception as exc:
         return jsonify({"error": "search_failed", "detail": str(exc)}), 503
 
@@ -69,4 +75,5 @@ def semantic_search():
         if book_id in book_rows:
             results.append(_format_result(book_rows[book_id], text, heading, distance))
 
-    return jsonify({"query": query, "results": results})
+    coverage = get_index_coverage(config)
+    return jsonify({"query": query, "results": results, "indexCoverage": coverage})

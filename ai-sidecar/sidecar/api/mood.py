@@ -12,6 +12,7 @@ from ..db.session import get_db
 from ..embeddings import get_embedding_provider
 from ..security import require_bearer_token
 from ..vectors import get_vector_store
+from ._coverage import get_index_coverage
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +81,13 @@ def mood_search():
     try:
         provider = get_embedding_provider(config)
         store = get_vector_store(config, provider.model_name)
-        query_vec = provider.embed([semantic_query])[0]
-        raw = store.search(query_vec, n_results=limit * 4)
+        query_vec = provider.embed_query([semantic_query])[0]
+        # Apply the relevance threshold: results further than max_distance are dropped.
+        raw = store.search(
+            query_vec,
+            n_results=limit * 4,
+            max_distance=config.search_max_distance,
+        )
     except Exception as exc:
         return jsonify({"error": "search_failed", "detail": str(exc)}), 503
 
@@ -116,10 +122,20 @@ def mood_search():
         if len(results) >= limit:
             break
 
+    # 4. Honest no-match: when no results pass the threshold, replace the upbeat
+    #    LLM explanation with a factual message so the frontend doesn't present
+    #    irrelevant books as confident matches.
+    if not results:
+        explanation = (
+            f"I couldn't find a good match for '{semantic_query}' in your library yet."
+        )
+
+    coverage = get_index_coverage(config)
     return jsonify({
         "prompt": prompt,
         "semanticQuery": semantic_query,
         "explanation": explanation,
         "excludedTags": sorted(exclude_tags),
         "results": results,
+        "indexCoverage": coverage,
     })

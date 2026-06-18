@@ -53,8 +53,13 @@ def book_recommendations(book_id: int):
 
         # Use the first chunk as the query vector — representative of the book's opening
         query_text = chunks[0]["text"]
-        query_vec = provider.embed([query_text])[0]
-        raw = store.search(query_vec, n_results=limit * 3, exclude_book_id=book_id)
+        query_vec = provider.embed_query([query_text])[0]
+        raw = store.search(
+            query_vec,
+            n_results=limit * 3,
+            exclude_book_id=book_id,
+            max_distance=config.search_max_distance,
+        )
     except Exception as exc:
         return jsonify({"error": "search_failed", "detail": str(exc)}), 503
 

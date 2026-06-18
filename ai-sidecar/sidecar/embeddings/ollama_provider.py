@@ -10,6 +10,14 @@ logger = logging.getLogger(__name__)
 
 _BATCH_SIZE = 32
 
+# nomic-embed-text supports asymmetric retrieval via task-type prefixes.
+# Using them substantially improves retrieval quality.
+# NOTE: these prefixes change embedding semantics — all vectors in a collection
+# MUST be embedded with the same prefix scheme.  The collection is currently
+# rebuilding from scratch, so it is safe to introduce them now.
+_NOMIC_DOC_PREFIX = "search_document: "
+_NOMIC_QUERY_PREFIX = "search_query: "
+
 
 class OllamaEmbeddingProvider(EmbeddingProvider):
     """Calls the Ollama /api/embed endpoint (Ollama ≥ 0.1.26).
@@ -34,6 +42,21 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
             result = self.embed(["probe"])
             self._dimension = len(result[0])
         return self._dimension
+
+    def _is_nomic(self) -> bool:
+        return "nomic-embed-text" in self._model
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Embed with document prefix for nomic-embed-text; otherwise plain embed."""
+        if self._is_nomic():
+            return self.embed([_NOMIC_DOC_PREFIX + t for t in texts])
+        return self.embed(texts)
+
+    def embed_query(self, texts: list[str]) -> list[list[float]]:
+        """Embed with query prefix for nomic-embed-text; otherwise plain embed."""
+        if self._is_nomic():
+            return self.embed([_NOMIC_QUERY_PREFIX + t for t in texts])
+        return self.embed(texts)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:

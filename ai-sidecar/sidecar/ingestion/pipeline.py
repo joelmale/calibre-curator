@@ -225,7 +225,7 @@ def _embed_pending(conn, provider, store) -> int:
         headings = [r["heading"] for r in rows]
 
         try:
-            vectors = provider.embed(texts)
+            vectors = provider.embed_documents(texts)
         except Exception as exc:
             logger.error("Embedding batch failed: %s", exc)
             break

@@ -8,10 +8,6 @@ from .base import SearchResult, VectorStore
 
 logger = logging.getLogger(__name__)
 
-# Chroma cosine distance is in [0, 2]; 0 = identical, 2 = opposite.
-# We cap at 1.0 for a usable similarity score.
-_MAX_COSINE_DISTANCE = 1.0
-
 
 def _collection_name(model_name: str) -> str:
     """Sanitise model name into a valid Chroma collection name."""
@@ -55,6 +51,7 @@ class ChromaStore(VectorStore):
         query_embedding: list[float],
         n_results: int,
         exclude_book_id: int | None = None,
+        max_distance: float | None = None,
     ) -> list[SearchResult]:
         where = (
             {"calibre_book_id": {"$ne": exclude_book_id}}
@@ -80,10 +77,13 @@ class ChromaStore(VectorStore):
         documents_out = response.get("documents", [[]])[0]
 
         for uid, dist, meta, doc in zip(ids_out, distances, metadatas_out, documents_out):
+            dist_f = float(dist)
+            if max_distance is not None and dist_f > max_distance:
+                continue
             results.append(SearchResult(
                 calibre_book_id=int(meta.get("calibre_book_id", 0)),
                 chunk_uid=uid,
-                distance=float(dist),
+                distance=dist_f,
                 text=doc or "",
                 heading=meta.get("heading") or None,
             ))

@@ -93,8 +93,12 @@ def generate():
                 query_text = f"{goal} (seed: {seed['title']})"
 
     try:
-        query_vec = provider.embed([query_text])[0]
-        raw = store.search(query_vec, n_results=_CANDIDATE_POOL * 3)
+        query_vec = provider.embed_query([query_text])[0]
+        raw = store.search(
+            query_vec,
+            n_results=_CANDIDATE_POOL * 3,
+            max_distance=config.search_max_distance,
+        )
     except Exception as exc:
         return jsonify({"error": "search_failed", "detail": str(exc)}), 503
 

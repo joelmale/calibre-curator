@@ -4,6 +4,7 @@ import { createAiBookList } from "../molecules/AiBookList";
 import { createAiSpinner } from "../atoms/AiSpinner";
 import { createAiAlert } from "../atoms/AiAlert";
 import { createAiEmptyState } from "../molecules/AiEmptyState";
+import { createAiIndexCoverageBanner } from "../molecules/AiIndexCoverageBanner";
 import { errorMessage } from "../../utils/result";
 import { escapeHtml } from "../../utils/dom";
 
@@ -26,9 +27,16 @@ export function createAiSearchPanel(client: IAiApiClient): HTMLElement {
       results.appendChild(createAiAlert(errorMessage(res.error), "danger"));
       return;
     }
+
+    // Show index-coverage notice when the index isn't fully built yet.
+    const banner = createAiIndexCoverageBanner(res.data.indexCoverage);
+    if (banner) results.appendChild(banner);
+
     if (res.data.results.length === 0) {
       results.appendChild(
-        createAiEmptyState(`No results for "${escapeHtml(query)}".`),
+        createAiEmptyState(
+          `No good matches found for "${escapeHtml(query)}" in the indexed portion of your library.`,
+        ),
       );
       return;
     }

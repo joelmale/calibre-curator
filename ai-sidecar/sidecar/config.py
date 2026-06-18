@@ -102,6 +102,16 @@ class Config:
         default_factory=lambda: int(os.getenv("MAX_EXTRACTED_CHARS_PER_BOOK", "120000"))
     )
 
+    # ── Search quality ────────────────────────────────────────────────────────
+    # Cosine distance threshold for relevance filtering. Chroma distances are
+    # in [0, 2]; 0 = identical, 2 = opposite.  Results with distance ABOVE this
+    # value are dropped as irrelevant.  At distance 0.75 the converted match%
+    # is ~63% — a reasonable "at least somewhat related" bar.
+    # Set SEARCH_MAX_DISTANCE=1.0 to disable filtering (legacy behaviour).
+    search_max_distance: float = field(
+        default_factory=lambda: float(os.getenv("SEARCH_MAX_DISTANCE", "0.75"))
+    )
+
 
 _config: Config | None = None
 

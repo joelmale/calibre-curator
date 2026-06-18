@@ -3,6 +3,7 @@ import { createAiBookList } from "../molecules/AiBookList";
 import { createAiSpinner } from "../atoms/AiSpinner";
 import { createAiAlert } from "../atoms/AiAlert";
 import { createAiEmptyState } from "../molecules/AiEmptyState";
+import { createAiIndexCoverageBanner } from "../molecules/AiIndexCoverageBanner";
 import { errorMessage } from "../../utils/result";
 import { escapeHtml } from "../../utils/dom";
 
@@ -46,12 +47,19 @@ export function createAiMoodPanel(client: IAiApiClient): HTMLElement {
       return;
     }
 
+    // Show index-coverage notice when the index isn't fully built yet.
+    const banner = createAiIndexCoverageBanner(res.data.indexCoverage);
+    if (banner) output.appendChild(banner);
+
+    // Always show the curator explanation (honest no-match text comes from backend).
     if (res.data.explanation) {
       const card = document.createElement("div");
-      card.className = "panel panel-info";
+      // Use warning style for no-match (results empty), info style for matches found.
+      const panelStyle = res.data.results.length === 0 ? "panel-warning" : "panel-info";
+      card.className = `panel ${panelStyle}`;
       card.innerHTML =
         `<div class="panel-body"><strong>Curator:</strong> ${escapeHtml(res.data.explanation)}` +
-        (res.data.semanticQuery
+        (res.data.results.length > 0 && res.data.semanticQuery
           ? `<br><small class="text-muted">Searched for: ${escapeHtml(res.data.semanticQuery)}</small>`
           : "") +
         `</div>`;
@@ -59,7 +67,7 @@ export function createAiMoodPanel(client: IAiApiClient): HTMLElement {
     }
 
     if (res.data.results.length === 0) {
-      output.appendChild(createAiEmptyState("No matching books found. Try rephrasing."));
+      output.appendChild(createAiEmptyState("Try rephrasing your mood, or check back as more books are indexed."));
       return;
     }
     output.appendChild(createAiBookList(res.data.results));

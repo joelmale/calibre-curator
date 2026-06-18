@@ -30,9 +30,15 @@ export interface ISemanticSearchRequest {
   };
 }
 
+export interface IIndexCoverage {
+  readonly indexedBookCount: number;
+  readonly totalBooks: number;
+}
+
 export interface ISemanticSearchResponse {
   readonly query: string;
   readonly results: readonly IApiBookResult[];
+  readonly indexCoverage?: IIndexCoverage;
 }
 
 export interface ICollectionsResponse {
@@ -61,6 +67,7 @@ export interface IMoodSearchResponse {
   readonly explanation: string;
   readonly excludedTags: readonly string[];
   readonly results: readonly IApiBookResult[];
+  readonly indexCoverage?: IIndexCoverage;
 }
 
 export interface ISequenceStep {

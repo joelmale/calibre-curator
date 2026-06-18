@@ -29,6 +29,7 @@ class VectorStore(ABC):
         query_embedding: list[float],
         n_results: int,
         exclude_book_id: int | None = None,
+        max_distance: float | None = None,
     ) -> list[SearchResult]: ...
 
     @abstractmethod
