@@ -2,6 +2,7 @@ import { HttpClient } from "./httpClient";
 import type {
   IAiApiClient,
   ICollectionsResponse,
+  IIngestionTriggerResponse,
   IRecommendationsResponse,
   ISemanticSearchRequest,
   ISemanticSearchResponse,
@@ -15,6 +16,13 @@ export class AiApiClient implements IAiApiClient {
 
   public getStatus(): Promise<ApiResult<IAiStatusResponse>> {
     return this.http.get<IAiStatusResponse>("/status");
+  }
+
+  public triggerIngestion(): Promise<ApiResult<IIngestionTriggerResponse>> {
+    return this.http.post<Record<string, never>, IIngestionTriggerResponse>(
+      "/ingestion/run",
+      {},
+    );
   }
 
   public searchSemantic(

@@ -3,10 +3,13 @@ import { createAiSpinner } from "../atoms/AiSpinner";
 import { createAiAlert } from "../atoms/AiAlert";
 import { createAiSearchPanel } from "../organisms/AiSearchPanel";
 import { createAiStatusPanel } from "../organisms/AiStatusPanel";
+import { createAiIngestionControls } from "../organisms/AiIngestionControls";
 import { createAiDashboardTemplate } from "../templates/AiDashboardTemplate";
 import { errorMessage } from "../../utils/result";
 
 export class AiDashboardPage {
+  private statusHolder: HTMLElement | null = null;
+
   public constructor(
     private readonly container: HTMLElement,
     private readonly client: IAiApiClient,
@@ -14,6 +17,7 @@ export class AiDashboardPage {
 
   public mount(): void {
     const statusHolder = document.createElement("div");
+    this.statusHolder = statusHolder;
     statusHolder.appendChild(createAiSpinner("Loading library status…"));
 
     const tpl = createAiDashboardTemplate({
@@ -25,10 +29,13 @@ export class AiDashboardPage {
     this.container.innerHTML = "";
     this.container.appendChild(tpl);
 
-    void this.loadStatus(statusHolder);
+    void this.loadStatus();
   }
 
-  private async loadStatus(holder: HTMLElement): Promise<void> {
+  private async loadStatus(): Promise<void> {
+    const holder = this.statusHolder;
+    if (!holder) return;
+
     const result = await this.client.getStatus();
     holder.innerHTML = "";
 
@@ -40,5 +47,11 @@ export class AiDashboardPage {
     }
 
     holder.appendChild(createAiStatusPanel(result.data));
+    holder.appendChild(
+      createAiIngestionControls(this.client, () => {
+        // Refresh status 3 s after triggering so the new run row appears
+        setTimeout(() => { void this.loadStatus(); }, 3000);
+      }),
+    );
   }
 }
