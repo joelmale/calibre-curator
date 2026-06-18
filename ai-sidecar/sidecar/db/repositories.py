@@ -81,19 +81,19 @@ class BookAiRepository:
 
     @staticmethod
     def get_incomplete_book_ids(conn: sqlite3.Connection) -> set[int]:
-        """Return IDs of all non-indexed books so they are retried on every run.
+        """Return IDs of all books that need extraction (pending or interrupted).
 
         Lifecycle: books enter as 'pending' (upsert), advance through
         'extracting' → 'chunked' → 'indexed' as the pipeline progresses, or
-        land on 'failed' if an error occurs.  We include 'pending' here so
-        that books which were inserted in a prior scan but never processed
-        (the common stuck state) are always re-queued.  Within a single run,
-        processed books reach 'indexed' or 'failed' before the next run
-        starts, so including 'pending' causes no harmful double-processing.
+        land on 'failed' if an error occurs.
+        We include 'pending' and 'extracting' here so that books which were
+        inserted or interrupted before chunking are re-queued.
+        We DO NOT include 'failed' (they will be retried if their metadata changes)
+        or 'chunked' (they are picked up directly by _embed_pending).
         """
         rows = conn.execute(
             "SELECT calibre_book_id FROM books_ai "
-            "WHERE ingestion_status != 'indexed'"
+            "WHERE ingestion_status IN ('pending', 'extracting')"
         ).fetchall()
         return {int(r["calibre_book_id"]) for r in rows}
 
