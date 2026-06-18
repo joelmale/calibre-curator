@@ -13,6 +13,10 @@ from .api.ingestion import ingestion_bp
 from .api.search import search_bp
 from .api.collections import collections_bp
 from .api.recommendations import recommendations_bp
+from .api.enrichment import enrichment_bp
+from .api.duplicates import duplicates_bp
+from .api.mood import mood_bp
+from .api.sequences import sequences_bp
 
 
 def create_app() -> Flask:
@@ -28,6 +32,10 @@ def create_app() -> Flask:
     app.register_blueprint(search_bp, url_prefix="/api/v1/search")
     app.register_blueprint(collections_bp, url_prefix="/api/v1/collections")
     app.register_blueprint(recommendations_bp, url_prefix="/api/v1/recommendations")
+    app.register_blueprint(enrichment_bp, url_prefix="/api/v1/enrichment")
+    app.register_blueprint(duplicates_bp, url_prefix="/api/v1/duplicates")
+    app.register_blueprint(mood_bp, url_prefix="/api/v1/mood")
+    app.register_blueprint(sequences_bp, url_prefix="/api/v1/sequences")
 
     # Guard against Werkzeug reloader spawning two scheduler instances in dev
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true" or config.app_env != "development":

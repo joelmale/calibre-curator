@@ -255,6 +255,310 @@ class BookAiLookup:
         return {int(r["calibre_book_id"]): r for r in rows}
 
 
+class EnrichmentRepository:
+    """Feature 4 — auto-tagging / metadata enrichment."""
+
+    @staticmethod
+    def get_candidates(
+        conn: sqlite3.Connection, limit: int = 50
+    ) -> list[sqlite3.Row]:
+        """Indexed books that lack tags and have no suggestion yet."""
+        return conn.execute(
+            """
+            SELECT b.calibre_book_id, b.title, b.author_sort, b.tags_json
+            FROM books_ai b
+            WHERE b.ingestion_status = 'indexed'
+              AND (b.tags_json IS NULL OR b.tags_json IN ('[]', ''))
+              AND NOT EXISTS (
+                  SELECT 1 FROM enrichment_suggestions s
+                  WHERE s.calibre_book_id = b.calibre_book_id
+              )
+            ORDER BY b.calibre_book_id ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    @staticmethod
+    def count_candidates(conn: sqlite3.Connection) -> int:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM books_ai b
+            WHERE b.ingestion_status = 'indexed'
+              AND (b.tags_json IS NULL OR b.tags_json IN ('[]', ''))
+              AND NOT EXISTS (
+                  SELECT 1 FROM enrichment_suggestions s
+                  WHERE s.calibre_book_id = b.calibre_book_id
+              )
+            """
+        ).fetchone()
+        return int(row["n"]) if row else 0
+
+    @staticmethod
+    def get_book_text(
+        conn: sqlite3.Connection, calibre_book_id: int, max_chars: int
+    ) -> str:
+        """Concatenate the book's chunks (in order) up to max_chars."""
+        rows = conn.execute(
+            """
+            SELECT text FROM book_chunks
+            WHERE calibre_book_id = ?
+            ORDER BY chunk_index ASC
+            """,
+            (calibre_book_id,),
+        ).fetchall()
+        out: list[str] = []
+        total = 0
+        for r in rows:
+            t = r["text"] or ""
+            out.append(t)
+            total += len(t)
+            if total >= max_chars:
+                break
+        return "\n\n".join(out)[:max_chars]
+
+    @staticmethod
+    def upsert_suggestion(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+        tags: list[str],
+        description: str | None,
+        reading_level: str | None,
+        confidence: float | None,
+        chat_model: str,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO enrichment_suggestions (
+                calibre_book_id, suggested_tags_json, suggested_description,
+                suggested_reading_level, confidence, chat_model,
+                review_status, generated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+            ON CONFLICT(calibre_book_id) DO UPDATE SET
+                suggested_tags_json     = excluded.suggested_tags_json,
+                suggested_description   = excluded.suggested_description,
+                suggested_reading_level = excluded.suggested_reading_level,
+                confidence              = excluded.confidence,
+                chat_model              = excluded.chat_model,
+                review_status           = 'pending',
+                generated_at            = excluded.generated_at
+            """,
+            (
+                calibre_book_id,
+                json.dumps(tags),
+                description,
+                reading_level,
+                confidence,
+                chat_model,
+                _now(),
+            ),
+        )
+
+    @staticmethod
+    def get_suggestion(
+        conn: sqlite3.Connection, calibre_book_id: int
+    ) -> sqlite3.Row | None:
+        return conn.execute(
+            "SELECT * FROM enrichment_suggestions WHERE calibre_book_id = ?",
+            (calibre_book_id,),
+        ).fetchone()
+
+    @staticmethod
+    def get_pending_suggestions(
+        conn: sqlite3.Connection, limit: int = 100
+    ) -> list[sqlite3.Row]:
+        """Pending suggestions joined with the book's current metadata."""
+        return conn.execute(
+            """
+            SELECT s.*, b.title, b.author_sort, b.tags_json AS current_tags_json
+            FROM enrichment_suggestions s
+            JOIN books_ai b ON b.calibre_book_id = s.calibre_book_id
+            WHERE s.review_status = 'pending'
+            ORDER BY s.confidence DESC NULLS LAST, s.generated_at ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    @staticmethod
+    def mark_suggestion_reviewed(
+        conn: sqlite3.Connection, calibre_book_id: int, status: str = "reviewed"
+    ) -> None:
+        conn.execute(
+            "UPDATE enrichment_suggestions SET review_status = ? WHERE calibre_book_id = ?",
+            (status, calibre_book_id),
+        )
+
+    # ── Queue (background pre-generation) ────────────────────────────────────
+
+    @staticmethod
+    def enqueue(conn: sqlite3.Connection, calibre_book_ids: list[int]) -> int:
+        if not calibre_book_ids:
+            return 0
+        conn.executemany(
+            """
+            INSERT INTO enrichment_queue (calibre_book_id, status, queued_at, updated_at)
+            VALUES (?, 'queued', ?, ?)
+            ON CONFLICT(calibre_book_id) DO NOTHING
+            """,
+            [(bid, _now(), _now()) for bid in calibre_book_ids],
+        )
+        return len(calibre_book_ids)
+
+    @staticmethod
+    def get_queued(conn: sqlite3.Connection, limit: int = 20) -> list[int]:
+        rows = conn.execute(
+            "SELECT calibre_book_id FROM enrichment_queue "
+            "WHERE status = 'queued' ORDER BY id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [int(r["calibre_book_id"]) for r in rows]
+
+    @staticmethod
+    def mark_queue_status(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        conn.execute(
+            "UPDATE enrichment_queue SET status = ?, error = ?, updated_at = ? "
+            "WHERE calibre_book_id = ?",
+            (status, error, _now(), calibre_book_id),
+        )
+
+    # ── Reviews / applied audit log ──────────────────────────────────────────
+
+    @staticmethod
+    def insert_review(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+        applied_tags: list[str] | None,
+        applied_description: str | None,
+        applied_reading_level: str | None,
+        decision: dict,
+        writeback_status: str,
+        writeback_error: str | None = None,
+        reviewer: str = "admin",
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO enrichment_reviews (
+                calibre_book_id, applied_tags_json, applied_description,
+                applied_reading_level, decision_json, reviewer,
+                writeback_status, writeback_error, applied_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                calibre_book_id,
+                json.dumps(applied_tags) if applied_tags is not None else None,
+                applied_description,
+                applied_reading_level,
+                json.dumps(decision),
+                reviewer,
+                writeback_status,
+                writeback_error,
+                _now(),
+            ),
+        )
+
+    @staticmethod
+    def get_reviews(conn: sqlite3.Connection, limit: int = 100) -> list[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT r.*, b.title, b.author_sort
+            FROM enrichment_reviews r
+            LEFT JOIN books_ai b ON b.calibre_book_id = r.calibre_book_id
+            ORDER BY r.id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+
+class CollectionRepository:
+    """Curated collections — used by the Sequence Builder (Feature 3)."""
+
+    @staticmethod
+    def save(
+        conn: sqlite3.Connection,
+        collection_slug: str,
+        title: str,
+        description: str,
+        collection_type: str,
+        generation_prompt: str | None,
+        items: list[tuple[int, int, float, str]],
+    ) -> None:
+        """Upsert a collection and replace its items.
+
+        items — list of (calibre_book_id, rank, score, match_reason).
+        """
+        now = _now()
+        conn.execute(
+            """
+            INSERT INTO curated_collections (
+                collection_slug, title, description, collection_type,
+                generation_prompt, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(collection_slug) DO UPDATE SET
+                title             = excluded.title,
+                description       = excluded.description,
+                collection_type   = excluded.collection_type,
+                generation_prompt = excluded.generation_prompt,
+                updated_at        = excluded.updated_at
+            """,
+            (collection_slug, title, description, collection_type,
+             generation_prompt, now, now),
+        )
+        conn.execute(
+            "DELETE FROM curated_collection_items WHERE collection_slug = ?",
+            (collection_slug,),
+        )
+        conn.executemany(
+            """
+            INSERT INTO curated_collection_items (
+                collection_slug, calibre_book_id, rank, score, match_reason, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [(collection_slug, bid, rank, score, reason, now)
+             for (bid, rank, score, reason) in items],
+        )
+
+    @staticmethod
+    def list_by_type(
+        conn: sqlite3.Connection, collection_type: str
+    ) -> list[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT c.collection_slug, c.title, c.description, c.collection_type,
+                   c.generation_prompt, c.updated_at,
+                   (SELECT COUNT(*) FROM curated_collection_items i
+                    WHERE i.collection_slug = c.collection_slug) AS item_count
+            FROM curated_collections c
+            WHERE c.collection_type = ?
+            ORDER BY c.updated_at DESC
+            """,
+            (collection_type,),
+        ).fetchall()
+
+    @staticmethod
+    def get_items(
+        conn: sqlite3.Connection, collection_slug: str
+    ) -> list[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT i.calibre_book_id, i.rank, i.score, i.match_reason,
+                   b.title, b.author_sort, b.authors_json
+            FROM curated_collection_items i
+            LEFT JOIN books_ai b ON b.calibre_book_id = i.calibre_book_id
+            WHERE i.collection_slug = ?
+            ORDER BY i.rank ASC
+            """,
+            (collection_slug,),
+        ).fetchall()
+
+
 class IngestionRunRepository:
     @staticmethod
     def start(conn: sqlite3.Connection) -> int:

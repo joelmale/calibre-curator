@@ -50,6 +50,63 @@ export interface IIngestionTriggerResponse {
   readonly limit: number | null;
 }
 
+export interface IMoodSearchRequest {
+  readonly prompt: string;
+  readonly limit?: number;
+}
+
+export interface IMoodSearchResponse {
+  readonly prompt: string;
+  readonly semanticQuery: string;
+  readonly explanation: string;
+  readonly excludedTags: readonly string[];
+  readonly results: readonly IApiBookResult[];
+}
+
+export interface ISequenceStep {
+  readonly rank: number;
+  readonly bookId: number;
+  readonly title: string;
+  readonly authors: readonly string[];
+  readonly reason: string;
+}
+
+export interface ISequenceGenerateRequest {
+  readonly goal: string;
+  readonly seedBookId?: number | null;
+}
+
+export interface ISequenceGenerateResponse {
+  readonly goal: string;
+  readonly explanation: string;
+  readonly candidateCount: number;
+  readonly steps: readonly ISequenceStep[];
+}
+
+export interface ISequenceSaveRequest {
+  readonly title: string;
+  readonly goal: string;
+  readonly steps: readonly ISequenceStep[];
+}
+
+export interface ISequenceSaveResponse {
+  readonly ok: boolean;
+  readonly collectionSlug: string;
+  readonly itemCount: number;
+}
+
+export interface ISavedSequence {
+  readonly collectionSlug: string;
+  readonly title: string;
+  readonly description: string;
+  readonly itemCount: number;
+  readonly steps: readonly ISequenceStep[];
+}
+
+export interface ISequencesListResponse {
+  readonly sequences: readonly ISavedSequence[];
+}
+
 export interface IAiApiClient {
   getStatus(): Promise<ApiResult<IAiStatusResponse>>;
   triggerIngestion(limit?: number | null): Promise<ApiResult<IIngestionTriggerResponse>>;
@@ -60,4 +117,12 @@ export interface IAiApiClient {
     bookId: number,
     limit: number,
   ): Promise<ApiResult<IRecommendationsResponse>>;
+  searchMood(request: IMoodSearchRequest): Promise<ApiResult<IMoodSearchResponse>>;
+  generateSequence(
+    request: ISequenceGenerateRequest,
+  ): Promise<ApiResult<ISequenceGenerateResponse>>;
+  saveSequence(
+    request: ISequenceSaveRequest,
+  ): Promise<ApiResult<ISequenceSaveResponse>>;
+  listSequences(): Promise<ApiResult<ISequencesListResponse>>;
 }

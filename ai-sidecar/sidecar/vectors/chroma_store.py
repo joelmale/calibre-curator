@@ -95,3 +95,18 @@ class ChromaStore(VectorStore):
             self._collection.delete(where={"calibre_book_id": calibre_book_id})
         except Exception as exc:
             logger.warning("Chroma delete for book %d failed: %s", calibre_book_id, exc)
+
+    def get_book_embedding(self, calibre_book_id: int) -> list[float] | None:
+        try:
+            res = self._collection.get(
+                where={"calibre_book_id": calibre_book_id},
+                include=["embeddings"],
+                limit=1,
+            )
+        except Exception as exc:
+            logger.warning("Chroma get embedding for book %d failed: %s", calibre_book_id, exc)
+            return None
+        embeddings = res.get("embeddings")
+        if embeddings is not None and len(embeddings) > 0:
+            return list(embeddings[0])
+        return None

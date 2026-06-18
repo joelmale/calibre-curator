@@ -290,6 +290,108 @@ def scrub_execute():
     return jsonify(result)
 
 
+# ── Duplicate detector (Feature 2) ─────────────────────────────────────────────
+
+@ai_bridge.route("/duplicates", methods=["GET"])
+@user_login_required
+def duplicates_index():
+    if not _is_admin():
+        abort(403)
+    return render_title_template(
+        "ai_duplicates.html",
+        title="Duplicate Detector",
+        page="ai-duplicates",
+    )
+
+
+# ── Metadata enrichment (Feature 4) ────────────────────────────────────────────
+
+@ai_bridge.route("/enrichment", methods=["GET"])
+@user_login_required
+def enrichment_index():
+    if not _is_admin():
+        abort(403)
+    return render_title_template(
+        "ai_enrichment.html",
+        title="Metadata Enrichment",
+        page="ai-enrichment",
+        calibredb_available=os.path.isfile(_CALIBREDB),
+    )
+
+
+def _sidecar_post(subpath: str, payload: dict) -> tuple[dict, int]:
+    """POST JSON to the sidecar API and return (json, status)."""
+    url = f"{SIDECAR_BASE_URL}/api/v1/{subpath}"
+    try:
+        resp = requests.post(url, headers=_sidecar_headers(), json=payload, timeout=60)
+    except requests.RequestException as exc:
+        return {"error": "sidecar_unavailable", "detail": str(exc)}, 503
+    try:
+        return resp.json(), resp.status_code
+    except ValueError:
+        return {"error": "bad_sidecar_response"}, resp.status_code
+
+
+@ai_bridge.route("/enrichment/apply", methods=["POST"])
+@user_login_required
+def enrichment_apply():
+    """Write approved metadata back to Calibre via calibredb, then record the
+    review in the sidecar. Per-field: a field is written only if approved."""
+    if not _is_admin():
+        return jsonify({"error": "admin_required"}), 403
+    if not os.path.isfile(_CALIBREDB):
+        return jsonify({"error": f"calibredb not found at {_CALIBREDB}"}), 503
+
+    body = request.get_json(silent=True) or {}
+    try:
+        book_id = int(body["bookId"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "bookId is required"}), 400
+
+    apply_tags = body.get("tags")          # list[str] or None (None = not approved)
+    apply_desc = body.get("description")   # str or None
+    reading_level = body.get("readingLevel")
+
+    fields: list[str] = []
+    if isinstance(apply_tags, list):
+        fields += ["--field", "tags:" + ",".join(str(t) for t in apply_tags)]
+    if isinstance(apply_desc, str) and apply_desc.strip():
+        fields += ["--field", f"comments:{apply_desc.strip()}"]
+
+    if not fields:
+        return jsonify({"error": "nothing to apply — no approved fields"}), 400
+
+    writeback_status = "applied"
+    writeback_error: str | None = None
+    try:
+        proc = subprocess.run(
+            [_CALIBREDB, "--with-library", _CALIBRE_LIB,
+             "set_metadata", str(book_id), *fields],
+            capture_output=True, text=True, timeout=60,
+        )
+        if proc.returncode != 0:
+            writeback_status = "failed"
+            writeback_error = (proc.stderr or proc.stdout or "calibredb error").strip()
+    except Exception as exc:
+        writeback_status = "failed"
+        writeback_error = str(exc)
+
+    # Record the decision in the sidecar audit log regardless of outcome.
+    _sidecar_post("enrichment/review", {
+        "bookId": book_id,
+        "appliedTags": apply_tags if isinstance(apply_tags, list) else None,
+        "appliedDescription": apply_desc if isinstance(apply_desc, str) else None,
+        "appliedReadingLevel": reading_level,
+        "decision": body.get("decision") or {},
+        "writebackStatus": writeback_status,
+        "writebackError": writeback_error,
+    })
+
+    if writeback_status == "failed":
+        return jsonify({"error": "writeback_failed", "detail": writeback_error}), 500
+    return jsonify({"ok": True, "bookId": book_id})
+
+
 @ai_bridge.route("/api/<path:subpath>", methods=["GET", "POST"])
 @user_login_required
 def proxy_api(subpath: str) -> Response:

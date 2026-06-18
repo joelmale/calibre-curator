@@ -132,6 +132,54 @@ CREATE TABLE IF NOT EXISTS ingestion_runs (
     error_count     INTEGER NOT NULL DEFAULT 0
 );
 
+-- ── Metadata enrichment (Feature 4) ──────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS enrichment_queue (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    calibre_book_id INTEGER NOT NULL UNIQUE,
+    status          TEXT NOT NULL DEFAULT 'queued',   -- queued|processing|done|error
+    error           TEXT,
+    queued_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(calibre_book_id) REFERENCES books_ai(calibre_book_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS enrichment_suggestions (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    calibre_book_id         INTEGER NOT NULL UNIQUE,
+    suggested_tags_json     TEXT NOT NULL DEFAULT '[]',
+    suggested_description   TEXT,
+    suggested_reading_level TEXT,
+    confidence              REAL,
+    chat_model              TEXT,
+    review_status           TEXT NOT NULL DEFAULT 'pending',  -- pending|reviewed|dismissed
+    generated_at            TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(calibre_book_id) REFERENCES books_ai(calibre_book_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS enrichment_reviews (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    calibre_book_id     INTEGER NOT NULL,
+    applied_tags_json   TEXT,                 -- NULL when the tags field was rejected
+    applied_description TEXT,                 -- NULL when the blurb was rejected
+    applied_reading_level TEXT,
+    decision_json       TEXT NOT NULL,        -- per-field accept/reject/edit record
+    reviewer            TEXT NOT NULL DEFAULT 'admin',
+    writeback_status    TEXT NOT NULL,        -- applied|failed
+    writeback_error     TEXT,
+    applied_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(calibre_book_id) REFERENCES books_ai(calibre_book_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_enrichment_queue_status
+    ON enrichment_queue(status);
+
+CREATE INDEX IF NOT EXISTS idx_enrichment_suggestions_review
+    ON enrichment_suggestions(review_status);
+
+CREATE INDEX IF NOT EXISTS idx_enrichment_reviews_book
+    ON enrichment_reviews(calibre_book_id);
+
 CREATE INDEX IF NOT EXISTS idx_books_ai_status
     ON books_ai(ingestion_status);
 

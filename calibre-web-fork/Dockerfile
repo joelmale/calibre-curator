@@ -9,6 +9,8 @@ COPY cps/ai_bridge.py /app/calibre-web/cps/ai_bridge.py
 COPY cps/templates/ai_dashboard.html /app/calibre-web/cps/templates/ai_dashboard.html
 COPY cps/templates/ai_scrub.html /app/calibre-web/cps/templates/ai_scrub.html
 COPY cps/templates/_ai_nav.html /app/calibre-web/cps/templates/_ai_nav.html
+COPY cps/templates/ai_enrichment.html /app/calibre-web/cps/templates/ai_enrichment.html
+COPY cps/templates/ai_duplicates.html /app/calibre-web/cps/templates/ai_duplicates.html
 COPY cps/static/ai/ /app/calibre-web/cps/static/ai/
 
 # Patch main.py: +2 lines (import + register blueprint)

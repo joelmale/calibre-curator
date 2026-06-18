@@ -1,0 +1,274 @@
+{% extends "layout.html" %}
+
+{% block header %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block body %}
+{% include '_ai_nav.html' %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-sm-10 col-sm-offset-1">
+
+      <h2>
+        Metadata Enrichment
+        <small class="text-muted">LLM-suggested tags &amp; descriptions, applied only after you approve</small>
+      </h2>
+
+      {% if not calibredb_available %}
+      <div class="alert alert-warning">
+        <strong>calibredb not found.</strong>
+        You can generate and review suggestions, but applying them back to Calibre
+        is disabled until <code>calibredb</code> is available
+        (add <code>DOCKER_MODS=linuxserver/mods:universal-calibre</code>).
+      </div>
+      {% endif %}
+
+      <ul class="nav nav-tabs" role="tablist" style="margin-bottom:16px">
+        <li role="presentation" class="active"><a href="#tab-queue" data-tab="queue">Queue</a></li>
+        <li role="presentation"><a href="#tab-review" data-tab="review">Review <span id="review-count" class="badge"></span></a></li>
+        <li role="presentation"><a href="#tab-applied" data-tab="applied">Applied</a></li>
+      </ul>
+
+      {# ── Queue tab ─────────────────────────────────────────────────────── #}
+      <div id="tab-queue" class="tab-pane">
+        <p>
+          <span id="queue-summary" class="text-muted">Loading…</span>
+        </p>
+        <p>
+          <button id="batch-btn" class="btn btn-primary btn-sm">
+            Generate next <input id="batch-count" type="number" value="20" min="1" max="100"
+              style="width:60px;color:#000" class="input-sm"> books
+          </button>
+          <button id="queue-refresh" class="btn btn-default btn-sm">Refresh</button>
+        </p>
+        <div id="queue-table"></div>
+      </div>
+
+      {# ── Review tab ────────────────────────────────────────────────────── #}
+      <div id="tab-review" class="tab-pane" style="display:none">
+        <p><button id="review-refresh" class="btn btn-default btn-sm">Refresh</button></p>
+        <div id="review-cards"></div>
+      </div>
+
+      {# ── Applied tab ───────────────────────────────────────────────────── #}
+      <div id="tab-applied" class="tab-pane" style="display:none">
+        <p><button id="applied-refresh" class="btn btn-default btn-sm">Refresh</button></p>
+        <div id="applied-table"></div>
+      </div>
+
+      <div id="enrich-spinner" style="display:none;text-align:center;padding:24px">
+        <span class="glyphicon glyphicon-refresh" style="font-size:2em;animation:spin 1s linear infinite"></span>
+        <p id="enrich-spinner-label" style="margin-top:8px;color:#888"></p>
+      </div>
+      <div id="enrich-error" class="alert alert-danger" style="display:none"></div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.tag-chip { display:inline-block;padding:2px 7px;border-radius:3px;font-size:11px;
+  background:#eef;color:#338;border:1px solid #cce;margin:1px; }
+.tag-new { background:#dff0d8;color:#3c763d;border-color:#d6e9c6; }
+.enrich-card { margin-bottom:16px; }
+.enrich-card .panel-body label { font-weight:normal; }
+</style>
+
+<script>
+(function () {
+  'use strict';
+
+  function csrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.content : '';
+  }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  var API = '/ai/api/enrichment';
+  var spinner = document.getElementById('enrich-spinner');
+  var spinnerLabel = document.getElementById('enrich-spinner-label');
+  var errorBox = document.getElementById('enrich-error');
+
+  function showSpinner(msg) { spinner.style.display = 'block'; spinnerLabel.textContent = msg || ''; }
+  function hideSpinner() { spinner.style.display = 'none'; }
+  function showError(msg) { errorBox.style.display = 'block'; errorBox.textContent = msg; }
+  function clearError() { errorBox.style.display = 'none'; }
+
+  function jget(url) {
+    return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); });
+  }
+  function jpost(url, body) {
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); });
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────
+  var tabs = document.querySelectorAll('.nav-tabs a[data-tab]');
+  tabs.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      tabs.forEach(function (t) { t.parentNode.classList.remove('active'); });
+      a.parentNode.classList.add('active');
+      ['queue', 'review', 'applied'].forEach(function (name) {
+        document.getElementById('tab-' + name).style.display =
+          (name === a.getAttribute('data-tab')) ? 'block' : 'none';
+      });
+    });
+  });
+
+  // ── Queue ─────────────────────────────────────────────────────────────
+  function loadQueue() {
+    clearError(); showSpinner('Loading queue…');
+    jget(API + '/queue?limit=50').then(function (res) {
+      hideSpinner();
+      if (!res.ok) { showError('Queue error: ' + (res.data.detail || res.data.error)); return; }
+      document.getElementById('queue-summary').textContent =
+        res.data.totalCandidates + ' book(s) eligible (indexed, no tags). Showing ' +
+        res.data.books.length + '.';
+      var rows = res.data.books.map(function (b) {
+        return '<tr><td>' + b.bookId + '</td><td>' + esc(b.title) +
+          '<br><small class="text-muted">' + esc(b.authorSort) + '</small></td>' +
+          '<td><button class="btn btn-xs btn-default gen-btn" data-id="' + b.bookId + '">Generate</button></td></tr>';
+      }).join('');
+      document.getElementById('queue-table').innerHTML = rows
+        ? '<table class="table table-condensed table-striped"><thead><tr><th>#</th><th>Title / Author</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<p class="text-muted">No eligible books — everything has tags or a pending suggestion.</p>';
+      document.querySelectorAll('.gen-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          btn.disabled = true; btn.textContent = 'Generating…';
+          jpost(API + '/generate/' + btn.getAttribute('data-id'), {}).then(function (r) {
+            if (!r.ok) { btn.textContent = 'Error'; showError(r.data.detail || r.data.error); }
+            else { btn.textContent = 'Done ✓'; }
+          });
+        });
+      });
+    });
+  }
+
+  document.getElementById('queue-refresh').addEventListener('click', loadQueue);
+  document.getElementById('batch-btn').addEventListener('click', function () {
+    var n = parseInt(document.getElementById('batch-count').value, 10) || 20;
+    clearError(); showSpinner('Queueing ' + n + ' books for background generation…');
+    jpost(API + '/queue/batch', { count: n }).then(function (r) {
+      hideSpinner();
+      if (!r.ok) { showError(r.data.detail || r.data.error); return; }
+      showError(''); errorBox.style.display = 'none';
+      document.getElementById('queue-summary').textContent =
+        'Queued ' + r.data.queued + ' book(s). Suggestions appear in the Review tab as they finish.';
+    });
+  });
+
+  // ── Review ────────────────────────────────────────────────────────────
+  function loadReview() {
+    clearError(); showSpinner('Loading suggestions…');
+    jget(API + '/suggestions?limit=100').then(function (res) {
+      hideSpinner();
+      if (!res.ok) { showError(res.data.detail || res.data.error); return; }
+      var list = res.data.suggestions;
+      document.getElementById('review-count').textContent = list.length || '';
+      if (!list.length) {
+        document.getElementById('review-cards').innerHTML = '<p class="text-muted">No suggestions awaiting review.</p>';
+        return;
+      }
+      document.getElementById('review-cards').innerHTML = list.map(renderCard).join('');
+      list.forEach(wireCard);
+    });
+  }
+
+  function renderCard(s) {
+    var conf = s.confidence != null ? Math.round(s.confidence * 100) + '% confidence' : '';
+    var curTags = (s.currentTags || []).map(function (t) { return '<span class="tag-chip">' + esc(t) + '</span>'; }).join(' ') || '<em class="text-muted">none</em>';
+    var newTags = (s.suggestedTags || []).map(function (t) { return '<span class="tag-chip tag-new">' + esc(t) + '</span>'; }).join(' ') || '<em class="text-muted">none</em>';
+    return '' +
+      '<div class="panel panel-default enrich-card" data-id="' + s.bookId + '">' +
+        '<div class="panel-heading"><strong>' + esc(s.title) + '</strong> ' +
+          '<small class="text-muted">' + esc(s.authorSort) + ' · ' + esc(s.suggestedReadingLevel || '') + ' · ' + conf + '</small></div>' +
+        '<div class="panel-body">' +
+          '<div class="row"><div class="col-sm-6">' +
+            '<p><strong>Current tags:</strong><br>' + curTags + '</p>' +
+          '</div><div class="col-sm-6">' +
+            '<div class="checkbox"><label><input type="checkbox" class="approve-tags" checked> ' +
+              '<strong>Apply suggested tags:</strong></label></div>' + newTags +
+          '</div></div>' +
+          '<hr>' +
+          '<div class="checkbox"><label><input type="checkbox" class="approve-desc" checked> ' +
+            '<strong>Apply description</strong></label></div>' +
+          '<textarea class="form-control desc-text" rows="3">' + esc(s.suggestedDescription || '') + '</textarea>' +
+          '<div style="margin-top:10px">' +
+            '<button class="btn btn-success btn-sm apply-btn">Apply approved fields</button> ' +
+            '<button class="btn btn-default btn-sm dismiss-btn">Dismiss</button> ' +
+            '<span class="apply-status text-muted" style="margin-left:8px"></span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function wireCard(s) {
+    var card = document.querySelector('.enrich-card[data-id="' + s.bookId + '"]');
+    if (!card) return;
+    var statusEl = card.querySelector('.apply-status');
+
+    card.querySelector('.apply-btn').addEventListener('click', function () {
+      var payload = { bookId: s.bookId, decision: {} };
+      if (card.querySelector('.approve-tags').checked) { payload.tags = s.suggestedTags || []; payload.decision.tags = 'accept'; }
+      else { payload.decision.tags = 'reject'; }
+      if (card.querySelector('.approve-desc').checked) { payload.description = card.querySelector('.desc-text').value; payload.decision.description = 'accept'; }
+      else { payload.decision.description = 'reject'; }
+      payload.readingLevel = s.suggestedReadingLevel || null;
+
+      if (payload.tags === undefined && payload.description === undefined) {
+        statusEl.textContent = 'Nothing approved — use Dismiss instead.'; return;
+      }
+      statusEl.textContent = 'Applying…';
+      jpost('/ai/enrichment/apply', payload).then(function (r) {
+        if (!r.ok) { statusEl.textContent = 'Error: ' + (r.data.detail || r.data.error); }
+        else { card.style.opacity = '0.5'; statusEl.textContent = 'Applied ✓'; }
+      });
+    });
+
+    card.querySelector('.dismiss-btn').addEventListener('click', function () {
+      statusEl.textContent = 'Dismissing…';
+      jpost(API + '/dismiss/' + s.bookId, {}).then(function (r) {
+        if (!r.ok) { statusEl.textContent = 'Error'; }
+        else { card.style.opacity = '0.5'; statusEl.textContent = 'Dismissed'; }
+      });
+    });
+  }
+
+  document.getElementById('review-refresh').addEventListener('click', loadReview);
+
+  // ── Applied ───────────────────────────────────────────────────────────
+  function loadApplied() {
+    clearError(); showSpinner('Loading audit log…');
+    jget(API + '/reviews?limit=100').then(function (res) {
+      hideSpinner();
+      if (!res.ok) { showError(res.data.detail || res.data.error); return; }
+      var rows = res.data.reviews.map(function (r) {
+        var badge = r.writebackStatus === 'applied'
+          ? '<span class="label label-success">applied</span>'
+          : '<span class="label label-danger">failed</span>';
+        var tags = r.appliedTags ? r.appliedTags.map(esc).join(', ') : '—';
+        return '<tr><td>' + r.bookId + '</td><td>' + esc(r.title) + '</td>' +
+          '<td>' + badge + '</td><td>' + tags + '</td>' +
+          '<td>' + (r.appliedDescription ? '✓' : '—') + '</td>' +
+          '<td><small>' + esc(r.appliedAt) + '</small></td></tr>';
+      }).join('');
+      document.getElementById('applied-table').innerHTML = rows
+        ? '<table class="table table-condensed table-striped"><thead><tr><th>#</th><th>Title</th><th>Status</th><th>Tags</th><th>Desc</th><th>When</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<p class="text-muted">Nothing applied yet.</p>';
+    });
+  }
+  document.getElementById('applied-refresh').addEventListener('click', loadApplied);
+
+  // Initial load
+  loadQueue();
+  loadReview();
+})();
+</script>
+{% endblock %}

@@ -31,14 +31,22 @@
             </small>
           </a>
         </li>
-        <li class="disabled"><a href="#">
-          Duplicate Detector
-          <small class="text-muted label label-default" style="vertical-align:middle">soon</small>
-        </a></li>
-        <li class="disabled"><a href="#">
-          Metadata Enrichment
-          <small class="text-muted label label-default" style="vertical-align:middle">soon</small>
-        </a></li>
+        <li class="{{ 'active' if page == 'ai-duplicates' }}">
+          <a href="{{ url_for('ai_bridge.duplicates_index') }}">
+            Duplicate Detector
+            <small class="text-muted" style="display:block;margin-top:1px">
+              Exact &amp; near-duplicate books
+            </small>
+          </a>
+        </li>
+        <li class="{{ 'active' if page == 'ai-enrichment' }}">
+          <a href="{{ url_for('ai_bridge.enrichment_index') }}">
+            Metadata Enrichment
+            <small class="text-muted" style="display:block;margin-top:1px">
+              LLM-suggested tags &amp; descriptions
+            </small>
+          </a>
+        </li>
       </ul>
     </li>
     {% endif %}

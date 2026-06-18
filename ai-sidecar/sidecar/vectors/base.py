@@ -33,3 +33,8 @@ class VectorStore(ABC):
 
     @abstractmethod
     def delete_by_book_id(self, calibre_book_id: int) -> None: ...
+
+    @abstractmethod
+    def get_book_embedding(self, calibre_book_id: int) -> list[float] | None:
+        """Return one representative embedding for a book, or None if absent."""
+        ...

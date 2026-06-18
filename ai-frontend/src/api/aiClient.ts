@@ -6,6 +6,13 @@ import type {
   IRecommendationsResponse,
   ISemanticSearchRequest,
   ISemanticSearchResponse,
+  IMoodSearchRequest,
+  IMoodSearchResponse,
+  ISequenceGenerateRequest,
+  ISequenceGenerateResponse,
+  ISequenceSaveRequest,
+  ISequenceSaveResponse,
+  ISequencesListResponse,
   ApiResult,
 } from "../types/api";
 import type { ICuratedCollection } from "../types/collection";
@@ -49,5 +56,36 @@ export class AiApiClient implements IAiApiClient {
     return this.http.get<IRecommendationsResponse>(
       `/recommendations/books/${bookId}?limit=${limit}`,
     );
+  }
+
+  public searchMood(
+    request: IMoodSearchRequest,
+  ): Promise<ApiResult<IMoodSearchResponse>> {
+    return this.http.post<IMoodSearchRequest, IMoodSearchResponse>(
+      "/mood/search",
+      request,
+    );
+  }
+
+  public generateSequence(
+    request: ISequenceGenerateRequest,
+  ): Promise<ApiResult<ISequenceGenerateResponse>> {
+    return this.http.post<ISequenceGenerateRequest, ISequenceGenerateResponse>(
+      "/sequences/generate",
+      request,
+    );
+  }
+
+  public saveSequence(
+    request: ISequenceSaveRequest,
+  ): Promise<ApiResult<ISequenceSaveResponse>> {
+    return this.http.post<ISequenceSaveRequest, ISequenceSaveResponse>(
+      "/sequences/save",
+      request,
+    );
+  }
+
+  public listSequences(): Promise<ApiResult<ISequencesListResponse>> {
+    return this.http.get<ISequencesListResponse>("/sequences");
   }
 }
