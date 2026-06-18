@@ -1,0 +1,168 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import datetime, timezone
+
+from .calibre_reader import CalibreBookRecord
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+class BookAiRepository:
+    @staticmethod
+    def get_known_book_ids(
+        conn: sqlite3.Connection,
+    ) -> dict[int, tuple[str, str]]:
+        """Returns {calibre_book_id: (metadata_hash, formats_hash)} for all tracked books."""
+        rows = conn.execute(
+            "SELECT calibre_book_id, metadata_hash, formats_hash FROM books_ai"
+        ).fetchall()
+        return {
+            int(r["calibre_book_id"]): (r["metadata_hash"], r["formats_hash"])
+            for r in rows
+        }
+
+    @staticmethod
+    def upsert(
+        conn: sqlite3.Connection,
+        record: CalibreBookRecord,
+        metadata_hash: str,
+        formats_hash: str,
+    ) -> None:
+        now = _now()
+        conn.execute("""
+            INSERT INTO books_ai (
+                calibre_book_id, title, author_sort, authors_json, tags_json,
+                series_name, language, calibre_path,
+                metadata_hash, formats_hash,
+                last_calibre_timestamp, last_seen_at,
+                ingestion_status,
+                created_at, updated_at
+            ) VALUES (
+                :book_id, :title, :author_sort, :authors_json, :tags_json,
+                :series_name, :language, :path,
+                :metadata_hash, :formats_hash,
+                :last_modified, :now,
+                'pending',
+                :now, :now
+            )
+            ON CONFLICT(calibre_book_id) DO UPDATE SET
+                title                   = excluded.title,
+                author_sort             = excluded.author_sort,
+                authors_json            = excluded.authors_json,
+                tags_json               = excluded.tags_json,
+                series_name             = excluded.series_name,
+                language                = excluded.language,
+                calibre_path            = excluded.calibre_path,
+                metadata_hash           = excluded.metadata_hash,
+                formats_hash            = excluded.formats_hash,
+                last_calibre_timestamp  = excluded.last_calibre_timestamp,
+                last_seen_at            = excluded.last_seen_at,
+                ingestion_status        = 'pending',
+                ingestion_error         = NULL,
+                updated_at              = excluded.updated_at
+        """, {
+            "book_id":        record.book_id,
+            "title":          record.title,
+            "author_sort":    record.author_sort,
+            "authors_json":   json.dumps(record.authors),
+            "tags_json":      json.dumps(record.tags),
+            "series_name":    record.series_name,
+            "language":       record.language,
+            "path":           record.path,
+            "metadata_hash":  metadata_hash,
+            "formats_hash":   formats_hash,
+            "last_modified":  record.last_modified,
+            "now":            now,
+        })
+
+    @staticmethod
+    def delete_removed(conn: sqlite3.Connection, current_ids: set[int]) -> int:
+        """Delete any tracked books whose ID is not in current_ids. Returns count deleted."""
+        if not current_ids:
+            result = conn.execute("DELETE FROM books_ai")
+            return result.rowcount
+        placeholders = ",".join("?" * len(current_ids))
+        result = conn.execute(
+            f"DELETE FROM books_ai WHERE calibre_book_id NOT IN ({placeholders})",
+            list(current_ids),
+        )
+        return result.rowcount
+
+    @staticmethod
+    def mark_status(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        conn.execute("""
+            UPDATE books_ai
+            SET ingestion_status = ?, ingestion_error = ?, updated_at = ?
+            WHERE calibre_book_id = ?
+        """, (status, error, _now(), calibre_book_id))
+
+
+class FormatAiRepository:
+    @staticmethod
+    def upsert(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+        fmt: str,
+        relative_path: str,
+        file_size_bytes: int | None = None,
+        mtime_ns: int | None = None,
+    ) -> None:
+        conn.execute("""
+            INSERT INTO book_formats_ai (
+                calibre_book_id, format, relative_path,
+                file_size_bytes, mtime_ns, extraction_status
+            ) VALUES (?, ?, ?, ?, ?, 'pending')
+            ON CONFLICT(calibre_book_id, format) DO UPDATE SET
+                relative_path       = excluded.relative_path,
+                file_size_bytes     = excluded.file_size_bytes,
+                mtime_ns            = excluded.mtime_ns,
+                extraction_status   = 'pending',
+                extraction_error    = NULL
+        """, (calibre_book_id, fmt, relative_path, file_size_bytes, mtime_ns))
+
+
+class IngestionRunRepository:
+    @staticmethod
+    def start(conn: sqlite3.Connection) -> int:
+        cursor = conn.execute("""
+            INSERT INTO ingestion_runs (started_at, status)
+            VALUES (?, 'running')
+        """, (_now(),))
+        return int(cursor.lastrowid)
+
+    @staticmethod
+    def finish(
+        conn: sqlite3.Connection,
+        run_id: int,
+        status: str,
+        scanned: int,
+        changed: int,
+        embedded: int,
+        errors: int,
+    ) -> None:
+        conn.execute("""
+            UPDATE ingestion_runs
+            SET finished_at     = ?,
+                status          = ?,
+                scanned_books   = ?,
+                changed_books   = ?,
+                embedded_chunks = ?,
+                error_count     = ?
+            WHERE id = ?
+        """, (_now(), status, scanned, changed, embedded, errors, run_id))
+
+    @staticmethod
+    def get_latest(conn: sqlite3.Connection) -> dict | None:
+        row = conn.execute(
+            "SELECT * FROM ingestion_runs ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
