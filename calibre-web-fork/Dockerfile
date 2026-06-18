@@ -1,7 +1,8 @@
 FROM lscr.io/linuxserver/calibre-web:latest
 
-# requests is needed by ai_bridge.py for the internal proxy
-RUN pip install --no-cache-dir requests
+# requests is needed by ai_bridge.py for the internal proxy.
+# Must install into the lsiopy venv that calibre-web runs in, not system Python.
+RUN /lsiopy/bin/pip install --no-cache-dir requests
 
 # Copy bridge module and compiled frontend assets
 COPY cps/ai_bridge.py /app/calibre-web/cps/ai_bridge.py

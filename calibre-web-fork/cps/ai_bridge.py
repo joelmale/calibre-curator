@@ -11,11 +11,17 @@ from datetime import datetime, timezone
 
 import requests
 from flask import Blueprint, Response, abort, jsonify, request
-from flask_login import current_user
 from .usermanagement import user_login_required
 from .render_template import render_title_template
 
 ai_bridge = Blueprint("ai_bridge", __name__, url_prefix="/ai")
+
+
+def _is_admin() -> bool:
+    # Lazy import — flask_login is available at request time but not reliably
+    # importable at module-load time in the linuxserver base image.
+    from flask_login import current_user  # noqa: PLC0415
+    return bool(current_user.role_admin())
 
 # ── Sidecar proxy config ──────────────────────────────────────────────────────
 
@@ -210,7 +216,7 @@ def dashboard():
 @ai_bridge.route("/scrub", methods=["GET"])
 @user_login_required
 def scrub_index():
-    if not current_user.role_admin():
+    if not _is_admin():
         abort(403)
     try:
         formats = _formats_in_library()
@@ -233,7 +239,7 @@ def scrub_index():
 @ai_bridge.route("/scrub/plan", methods=["POST"])
 @user_login_required
 def scrub_plan():
-    if not current_user.role_admin():
+    if not _is_admin():
         return jsonify({"error": "admin_required"}), 403
 
     body = request.get_json(silent=True) or {}
@@ -254,7 +260,7 @@ def scrub_plan():
 @ai_bridge.route("/scrub/execute", methods=["POST"])
 @user_login_required
 def scrub_execute():
-    if not current_user.role_admin():
+    if not _is_admin():
         return jsonify({"error": "admin_required"}), 403
 
     body = request.get_json(silent=True) or {}
