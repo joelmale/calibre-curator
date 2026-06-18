@@ -1,0 +1,63 @@
+{# Shared navigation bar included by all AI tool pages.
+   Caller must set `page` variable to the current page key. #}
+<nav class="ai-nav" aria-label="AI Curator navigation" style="
+    background:#fff;
+    border-bottom:1px solid #e0e0e0;
+    margin-bottom:20px;
+    padding:0 4px;
+">
+  <ul class="nav nav-tabs" style="border-bottom:none">
+
+    <li role="presentation" class="{{ 'active' if page == 'ai-dashboard' }}">
+      <a href="{{ url_for('ai_bridge.dashboard') }}">
+        <span class="glyphicon glyphicon-home" aria-hidden="true"></span>
+        &nbsp;Dashboard
+      </a>
+    </li>
+
+    {% if current_user.role_admin() %}
+    <li role="presentation" class="dropdown {{ 'active' if page in ['ai-scrub'] }}">
+      <a class="dropdown-toggle" data-toggle="dropdown" role="button"
+         aria-haspopup="true" aria-expanded="false">
+        <span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
+        &nbsp;Library Tools&nbsp;<span class="caret"></span>
+      </a>
+      <ul class="dropdown-menu">
+        <li class="{{ 'active' if page == 'ai-scrub' }}">
+          <a href="{{ url_for('ai_bridge.scrub_index') }}">
+            Format Scrub
+            <small class="text-muted" style="display:block;margin-top:1px">
+              Remove non-canonical formats in bulk
+            </small>
+          </a>
+        </li>
+        <li class="disabled"><a href="#">
+          Duplicate Detector
+          <small class="text-muted label label-default" style="vertical-align:middle">soon</small>
+        </a></li>
+        <li class="disabled"><a href="#">
+          Metadata Enrichment
+          <small class="text-muted label label-default" style="vertical-align:middle">soon</small>
+        </a></li>
+      </ul>
+    </li>
+    {% endif %}
+
+    <li role="presentation" class="disabled">
+      <a href="#">
+        <span class="glyphicon glyphicon-search" aria-hidden="true"></span>
+        &nbsp;Mood Search
+        <small class="text-muted label label-default" style="vertical-align:middle;margin-left:4px">soon</small>
+      </a>
+    </li>
+
+    <li role="presentation" class="disabled">
+      <a href="#">
+        <span class="glyphicon glyphicon-list-alt" aria-hidden="true"></span>
+        &nbsp;Reading Sequences
+        <small class="text-muted label label-default" style="vertical-align:middle;margin-left:4px">soon</small>
+      </a>
+    </li>
+
+  </ul>
+</nav>

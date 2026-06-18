@@ -21,7 +21,7 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=5 \
 
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:8090", \
-     "--workers", "2", \
-     "--timeout", "120", \
+     "--workers", "1", \
+     "--timeout", "300", \
      "--access-logfile", "-", \
      "sidecar.app:create_app()"]

@@ -18,9 +18,9 @@ ai_bridge = Blueprint("ai_bridge", __name__, url_prefix="/ai")
 
 
 def _is_admin() -> bool:
-    # Lazy import — flask_login is available at request time but not reliably
-    # importable at module-load time in the linuxserver base image.
-    from flask_login import current_user  # noqa: PLC0415
+    # calibre-web bundles its own cw_login rather than using the flask_login PyPI
+    # package — import from there to get the active current_user proxy.
+    from .cw_login import current_user  # noqa: PLC0415
     return bool(current_user.role_admin())
 
 # ── Sidecar proxy config ──────────────────────────────────────────────────────
