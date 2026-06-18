@@ -1,59 +1,6 @@
-const i=document.getElementById("ai-curation-root"),d=(i==null?void 0:i.dataset.apiBase)??"/ai/api/",u=d.endsWith("/")?d.slice(0,-1):d;class p{constructor(t){this.baseUrl=t}get(t){return this.request("GET",t)}post(t,e){return this.request("POST",t,e)}async request(t,e,o){try{const n={method:t,headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",...o!==void 0?{body:JSON.stringify(o)}:{}},s=await fetch(`${this.baseUrl}${e}`,n),l=await s.json();return s.ok?{ok:!0,data:l}:{ok:!1,error:this.toApiError(l)}}catch(n){return{ok:!1,error:{error:"network_error",detail:n instanceof Error?n.message:"Unknown network error"}}}}toApiError(t){if(typeof t=="object"&&t!==null&&"error"in t){const e=t;return{error:typeof e.error=="string"?e.error:"api_error",detail:typeof e.detail=="string"?e.detail:null}}return{error:"api_error",detail:null}}}class h{constructor(t){this.http=t}getStatus(){return this.http.get("/status")}searchSemantic(t){return this.http.post("/search/semantic",t)}listCollections(){return this.http.get("/collections/")}getCollection(t){return this.http.get(`/collections/${encodeURIComponent(t)}`)}getBookRecommendations(t,e){return this.http.get(`/recommendations/books/${t}?limit=${e}`)}}function b(r){return r.detail??r.error}function g(r){if(!r)return"—";try{return new Date(r).toLocaleString()}catch{return r}}function a(r){const t=document.createElement("span");return t.textContent=r,t.innerHTML}class m{constructor(t,e){this.container=t,this.client=e}mount(){this.container.innerHTML=`
-      <div class="container-fluid ai-dashboard">
-        <div class="row">
-          <div class="col-sm-12">
-            <h2 class="ai-dashboard__heading">AI Curated Library</h2>
-          </div>
-        </div>
-        <div id="ai-status-panel" class="row">
-          <div class="col-sm-12">
-            <div class="ai-spinner">
-              <span class="glyphicon glyphicon-refresh ai-spinner__icon"></span>
-              Loading status&hellip;
-            </div>
-          </div>
-        </div>
-      </div>
-    `,this.loadStatus()}async loadStatus(){const t=this.container.querySelector("#ai-status-panel");if(!(t instanceof HTMLElement))return;const e=await this.client.getStatus();if(!e.ok){t.innerHTML=`
-        <div class="col-sm-12">
-          <div class="alert alert-danger">
-            <strong>Could not reach sidecar:</strong> ${a(b(e.error))}
-          </div>
-        </div>`;return}t.innerHTML=this.renderStatus(e.data)}renderStatus(t){const e=t.library.metadataDbReadable?'<span class="label label-success">Readable</span>':'<span class="label label-danger">Not found</span>',o=t.library.bookCount>0?Math.round(t.library.indexedBookCount/t.library.bookCount*100):0,n=t.lastIngestionRun,s=n?`<tr><td>Last scan</td><td>${a(g(n.startedAt))}</td></tr>
-         <tr><td>Scan status</td><td><code>${a(n.status)}</code></td></tr>
-         <tr><td>Books scanned</td><td>${n.scannedBooks.toLocaleString()}</td></tr>
-         <tr><td>Chunks embedded</td><td>${n.embeddedChunks.toLocaleString()}</td></tr>
-         <tr><td>Errors</td><td>${n.errorCount}</td></tr>`:'<tr><td colspan="2">No ingestion runs yet.</td></tr>';return`
-      <div class="col-sm-6">
-        <div class="panel panel-default">
-          <div class="panel-heading"><h3 class="panel-title">Library Index</h3></div>
-          <table class="table table-condensed">
-            <tbody>
-              <tr><td>Calibre metadata.db</td><td>${e}</td></tr>
-              <tr><td>Total books</td><td>${t.library.bookCount.toLocaleString()}</td></tr>
-              <tr>
-                <td>Indexed</td>
-                <td>
-                  ${t.library.indexedBookCount.toLocaleString()} / ${t.library.bookCount.toLocaleString()}
-                  <div class="progress" style="margin:4px 0 0;height:8px">
-                    <div class="progress-bar" style="width:${o}%"></div>
-                  </div>
-                </td>
-              </tr>
-              <tr><td>Pending</td><td>${t.library.pendingBookCount.toLocaleString()}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="col-sm-6">
-        <div class="panel panel-default">
-          <div class="panel-heading"><h3 class="panel-title">Embedding &amp; Ingestion</h3></div>
-          <table class="table table-condensed">
-            <tbody>
-              <tr><td>Provider</td><td><code>${a(t.embedding.provider)}</code></td></tr>
-              <tr><td>Model</td><td><code>${a(t.embedding.model)}</code></td></tr>
-              ${s}
-            </tbody>
-          </table>
-        </div>
-      </div>`}}const v=new p(u),y=new h(v),c=document.getElementById("ai-curation-root");c instanceof HTMLElement&&new m(c,y).mount();
+const p=document.getElementById("ai-curation-root"),h=(p==null?void 0:p.dataset.apiBase)??"/ai/api/",A=h.endsWith("/")?h.slice(0,-1):h;class k{constructor(e){this.baseUrl=e}get(e){return this.request("GET",e)}post(e,n){return this.request("POST",e,n)}async request(e,n,r){try{const a={method:e,headers:{Accept:"application/json","Content-Type":"application/json"},credentials:"same-origin",...r!==void 0?{body:JSON.stringify(r)}:{}},o=await fetch(`${this.baseUrl}${n}`,a),c=await o.json();return o.ok?{ok:!0,data:c}:{ok:!1,error:this.toApiError(c)}}catch(a){return{ok:!1,error:{error:"network_error",detail:a instanceof Error?a.message:"Unknown network error"}}}}toApiError(e){if(typeof e=="object"&&e!==null&&"error"in e){const n=e;return{error:typeof n.error=="string"?n.error:"api_error",detail:typeof n.detail=="string"?n.detail:null}}return{error:"api_error",detail:null}}}class T{constructor(e){this.http=e}getStatus(){return this.http.get("/status")}searchSemantic(e){return this.http.post("/search/semantic",e)}listCollections(){return this.http.get("/collections/")}getCollection(e){return this.http.get(`/collections/${encodeURIComponent(e)}`)}getBookRecommendations(e,n){return this.http.get(`/recommendations/books/${e}?limit=${n}`)}}function y(t="Loading…"){const e=document.createElement("div");return e.className="ai-spinner",e.setAttribute("role","status"),e.setAttribute("aria-label",t),e.innerHTML=`<span class="glyphicon glyphicon-refresh ai-spinner__icon" aria-hidden="true"></span> ${t}`,e}function s(t){const e=document.createElement("span");return e.textContent=t,e.innerHTML}function v(t,e="info"){const n=document.createElement("div");return n.className=`alert alert-${e} ai-alert`,n.setAttribute("role","alert"),n.innerHTML=s(t),n}function w(t){const e=document.createElement("input");return e.type="text",e.className="form-control ai-text-input",t.placeholder!==void 0&&(e.placeholder=t.placeholder),t.ariaLabel!==void 0&&e.setAttribute("aria-label",t.ariaLabel),t.id!==void 0&&(e.id=t.id),e}function $(t){const e=document.createElement("form");e.className="ai-search-bar";const n=document.createElement("div");n.className="input-group";const r=w({placeholder:"Search by theme, mood, concept…",ariaLabel:"Semantic search"}),a=document.createElement("span");a.className="input-group-btn";const o=document.createElement("button");return o.type="submit",o.className="btn btn-primary",o.textContent="Search",a.appendChild(o),n.appendChild(r),n.appendChild(a),e.appendChild(n),e.addEventListener("submit",c=>{c.preventDefault();const i=r.value.trim();i&&t(i)}),e}function M(t){const e=document.createElement("span"),n=t>=80?"label-success":t>=60?"label-warning":"label-default";return e.className=`label ${n} ai-badge`,e.textContent=`${t}% match`,e}function B(t){const e=document.createElement("div");e.className="ai-book-card";const n=t.authors.map(s).join(", "),r=t.matchReasons.map(o=>`<li>${s(o)}</li>`).join(""),a=document.createElement("div");return a.className="ai-book-card__body",a.innerHTML=`
+    <h4 class="ai-book-card__title">${s(t.title)}</h4>
+    <p class="ai-book-card__authors">${n}</p>
+    <ul class="ai-match-reasons">${r}</ul>`,a.prepend(M(t.matchPercent)),e.appendChild(a),e}function H(t){const e=document.createElement("div");e.className="row ai-book-list";for(const n of t){const r=document.createElement("div");r.className="col-xs-12 col-sm-6 col-md-4",r.style.marginBottom="16px",r.appendChild(B(n)),e.appendChild(r)}return e}function _(t){const e=document.createElement("div");return e.className="ai-empty-state text-center text-muted",e.innerHTML=`<p>${s(t)}</p>`,e}function N(t){return t.detail??t.error}function R(t){const e=document.createElement("div");e.className="ai-search-panel";const n=document.createElement("div");n.className="ai-search-panel__results",n.style.marginTop="16px";async function r(a){n.innerHTML="",n.appendChild(y("Searching…"));const o=await t.searchSemantic({query:a,limit:12});if(n.innerHTML="",!o.ok){n.appendChild(v(N(o.error),"danger"));return}if(o.data.results.length===0){n.appendChild(_(`No results for "${s(a)}".`));return}const c=document.createElement("h4");c.textContent=`Results for "${a}"`,c.style.marginBottom="12px",n.appendChild(c),n.appendChild(H(o.data.results))}return e.appendChild($(r)),e.appendChild(n),e}function P(t){const e=Math.max(0,Math.min(100,Math.round(t))),n=document.createElement("div");return n.className="progress ai-progress-bar",n.style.marginTop="4px",n.style.height="8px",n.innerHTML=`<div class="progress-bar" role="progressbar"
+    aria-valuenow="${e}" aria-valuemin="0" aria-valuemax="100"
+    style="width:${e}%"></div>`,n}function b(t){const e=document.createElement("table");e.className="table table-condensed ai-status-table";const n=document.createElement("tbody");for(const[r,a]of t){const o=document.createElement("tr"),c=document.createElement("td");c.textContent=r;const i=document.createElement("td");typeof a=="string"?i.innerHTML=s(a):i.appendChild(a),o.appendChild(c),o.appendChild(i),n.appendChild(o)}return e.appendChild(n),e}function I(t){if(!t)return"—";try{return new Date(t).toLocaleString()}catch{return t}}function D(t){const e=document.createElement("code");return e.textContent=t.status,b([["Last scan",I(t.startedAt)],["Status",e],["Books scanned",t.scannedBooks.toLocaleString()],["Chunks embedded",t.embeddedChunks.toLocaleString()],["Errors",s(String(t.errorCount))]])}function j(t){const e=document.createElement("div");e.className="row ai-status-panel";const n=t.library.bookCount>0?t.library.indexedBookCount/t.library.bookCount*100:0,r=document.createElement("span");r.className=`label ${t.library.metadataDbReadable?"label-success":"label-danger"}`,r.textContent=t.library.metadataDbReadable?"Readable":"Not found";const a=document.createElement("div");a.innerHTML=`${t.library.indexedBookCount.toLocaleString()} / ${t.library.bookCount.toLocaleString()}`,a.appendChild(P(n));const o=b([["Calibre metadata.db",r],["Total books",t.library.bookCount.toLocaleString()],["Indexed",a],["Pending",t.library.pendingBookCount.toLocaleString()]]),c=f("Library Index",o),i=document.createElement("code");i.textContent=t.embedding.provider;const g=document.createElement("code");g.textContent=t.embedding.model;const L=b([["Provider",i],["Model",g]]),x=t.lastIngestionRun?D(t.lastIngestionRun):(()=>{const l=document.createElement("p");return l.className="text-muted",l.style.padding="8px",l.textContent="No ingestion runs yet.",l})(),d=document.createDocumentFragment();d.appendChild(L),d.appendChild(x);const C=document.createElement("div");C.appendChild(d);const S=f("Embedding & Ingestion",C),m=document.createElement("div");m.className="col-sm-6",m.appendChild(c);const u=document.createElement("div");return u.className="col-sm-6",u.appendChild(S),e.appendChild(m),e.appendChild(u),e}function f(t,e){const n=document.createElement("div");n.className="panel panel-default";const r=document.createElement("div");return r.className="panel-heading",r.innerHTML=`<h3 class="panel-title">${t}</h3>`,n.appendChild(r),n.appendChild(e),n}function U(t){const e=document.createElement("div");e.className="container-fluid ai-dashboard";const n=document.createElement("div");n.className="row",n.innerHTML=`<div class="col-sm-12"><h2 class="ai-dashboard__heading">${t.heading}</h2></div>`;const r=document.createElement("div");r.className="row";const a=document.createElement("div");a.className="col-sm-12",a.appendChild(t.search),r.appendChild(a);const o=document.createElement("div");o.className="row",o.style.marginTop="24px";const c=document.createElement("div");return c.className="col-sm-12",c.appendChild(t.status),o.appendChild(c),e.appendChild(n),e.appendChild(r),e.appendChild(o),e}class q{constructor(e,n){this.container=e,this.client=n}mount(){const e=document.createElement("div");e.appendChild(y("Loading library status…"));const n=U({heading:"AI Curated Library",search:R(this.client),status:e});this.container.innerHTML="",this.container.appendChild(n),this.loadStatus(e)}async loadStatus(e){const n=await this.client.getStatus();if(e.innerHTML="",!n.ok){e.appendChild(v(`Could not reach sidecar: ${N(n.error)}`,"danger"));return}e.appendChild(j(n.data))}}const F=new k(A),O=new T(F),E=document.getElementById("ai-curation-root");E instanceof HTMLElement&&new q(E,O).mount();

@@ -1,7 +1,15 @@
-import type { IBookSearchResult } from "./book";
 import type { ICuratedCollection, ICuratedCollectionSummary } from "./collection";
-import type { IBookRecommendation } from "./recommendation";
 import type { IAiStatusResponse } from "./status";
+
+// Matches the actual JSON shape returned by the sidecar search + recommendations APIs
+export interface IApiBookResult {
+  readonly bookId: number;
+  readonly title: string;
+  readonly authors: readonly string[];
+  readonly matchPercent: number;
+  readonly matchReasons: readonly string[];
+  readonly score: number;
+}
 
 export interface IApiError {
   readonly error: string;
@@ -24,7 +32,7 @@ export interface ISemanticSearchRequest {
 
 export interface ISemanticSearchResponse {
   readonly query: string;
-  readonly results: readonly IBookSearchResult[];
+  readonly results: readonly IApiBookResult[];
 }
 
 export interface ICollectionsResponse {
@@ -32,8 +40,8 @@ export interface ICollectionsResponse {
 }
 
 export interface IRecommendationsResponse {
-  readonly seedBookId: number;
-  readonly recommendations: readonly IBookRecommendation[];
+  readonly sourceBookId: number;
+  readonly recommendations: readonly IApiBookResult[];
 }
 
 export interface IAiApiClient {
@@ -41,5 +49,8 @@ export interface IAiApiClient {
   searchSemantic(request: ISemanticSearchRequest): Promise<ApiResult<ISemanticSearchResponse>>;
   listCollections(): Promise<ApiResult<ICollectionsResponse>>;
   getCollection(collectionId: string): Promise<ApiResult<ICuratedCollection>>;
-  getBookRecommendations(bookId: number, limit: number): Promise<ApiResult<IRecommendationsResponse>>;
+  getBookRecommendations(
+    bookId: number,
+    limit: number,
+  ): Promise<ApiResult<IRecommendationsResponse>>;
 }

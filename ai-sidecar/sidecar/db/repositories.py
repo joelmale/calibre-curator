@@ -274,4 +274,15 @@ class IngestionRunRepository:
         row = conn.execute(
             "SELECT * FROM ingestion_runs ORDER BY id DESC LIMIT 1"
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        return {
+            "runId":          row["id"],
+            "startedAt":      row["started_at"],
+            "finishedAt":     row["finished_at"],
+            "status":         row["status"],
+            "scannedBooks":   row["scanned_books"],
+            "changedBooks":   row["changed_books"],
+            "embeddedChunks": row["embedded_chunks"],
+            "errorCount":     row["error_count"],
+        }
