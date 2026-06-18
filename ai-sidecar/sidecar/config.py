@@ -36,7 +36,7 @@ class Config:
         default_factory=lambda: os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
     )
     ollama_chat_model: str = field(
-        default_factory=lambda: os.getenv("OLLAMA_CHAT_MODEL", "llama3.2:3b")
+        default_factory=lambda: os.getenv("OLLAMA_CHAT_MODEL", "llama3.2:latest")
     )
 
     openai_api_key: str | None = field(
