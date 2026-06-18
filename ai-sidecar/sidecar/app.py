@@ -17,6 +17,7 @@ from .api.enrichment import enrichment_bp
 from .api.duplicates import duplicates_bp
 from .api.mood import mood_bp
 from .api.sequences import sequences_bp
+from .api.providers import providers_bp
 
 
 def create_app() -> Flask:
@@ -25,6 +26,16 @@ def create_app() -> Flask:
     config = get_config()
 
     init_db(config.sidecar_db_path)
+
+    # Load saved per-provider rate limits into the in-memory limiter.
+    from .ai.rate_limiter import get_rate_limiter
+    from .db.repositories import ProviderSettingsRepository
+    from .db.session import get_db
+    try:
+        with get_db() as conn:
+            get_rate_limiter().load(ProviderSettingsRepository.get_all(conn))
+    except Exception:  # noqa: BLE001 — never block startup on settings load
+        pass
 
     app.register_blueprint(health_bp)
     app.register_blueprint(status_bp, url_prefix="/api/v1")
@@ -36,6 +47,7 @@ def create_app() -> Flask:
     app.register_blueprint(duplicates_bp, url_prefix="/api/v1/duplicates")
     app.register_blueprint(mood_bp, url_prefix="/api/v1/mood")
     app.register_blueprint(sequences_bp, url_prefix="/api/v1/sequences")
+    app.register_blueprint(providers_bp, url_prefix="/api/v1/providers")
 
     # Guard against Werkzeug reloader spawning two scheduler instances in dev
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true" or config.app_env != "development":

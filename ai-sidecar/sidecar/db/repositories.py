@@ -477,6 +477,37 @@ class EnrichmentRepository:
         ).fetchall()
 
 
+class ProviderSettingsRepository:
+    """Per-provider rate-limit settings for the chat fallback chain."""
+
+    @staticmethod
+    def get_all(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+        return conn.execute(
+            "SELECT provider, rpm, rph, enabled FROM provider_rate_limits"
+        ).fetchall()
+
+    @staticmethod
+    def upsert(
+        conn: sqlite3.Connection,
+        provider: str,
+        rpm: int | None,
+        rph: int | None,
+        enabled: bool,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO provider_rate_limits (provider, rpm, rph, enabled, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(provider) DO UPDATE SET
+                rpm        = excluded.rpm,
+                rph        = excluded.rph,
+                enabled    = excluded.enabled,
+                updated_at = excluded.updated_at
+            """,
+            (provider, rpm, rph, 1 if enabled else 0, _now()),
+        )
+
+
 class CollectionRepository:
     """Curated collections — used by the Sequence Builder (Feature 3)."""
 

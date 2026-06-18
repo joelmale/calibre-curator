@@ -204,15 +204,17 @@ class GeminiChatClient(ChatClient):
 
 
 class FallbackChatClient(ChatClient):
-    """Tries each client in order, falling through to the next on ChatError.
+    """Tries each client in order, falling through to the next on ChatError or
+    when a provider is over its configured rate limit / disabled.
 
     Records which provider actually answered so callers can log it.
     """
 
-    def __init__(self, clients: list[ChatClient]) -> None:
+    def __init__(self, clients: list[ChatClient], limiter: Any | None = None) -> None:
         if not clients:
             raise ValueError("FallbackChatClient requires at least one client")
         self._clients = clients
+        self._limiter = limiter
         self._last_model: str | None = None
 
     @property
@@ -231,7 +233,15 @@ class FallbackChatClient(ChatClient):
         timeout: int = _DEFAULT_TIMEOUT,
     ) -> dict[str, Any]:
         last_error: ChatError | None = None
+        attempted = False
         for client in self._clients:
+            if self._limiter is not None and not self._limiter.allow(client.provider_key):
+                logger.info(
+                    "Chat provider '%s' rate-limited or disabled — skipping",
+                    client.provider_key,
+                )
+                continue
+            attempted = True
             try:
                 result = client.chat_json(
                     system, user, schema=schema,
@@ -245,4 +255,11 @@ class FallbackChatClient(ChatClient):
                     client.model_name, exc,
                 )
                 last_error = exc
-        raise last_error or ChatError("no chat providers available")
+        if last_error is not None:
+            raise last_error
+        if not attempted:
+            raise ChatError(
+                "All chat providers are rate-limited or disabled. Adjust limits "
+                "on the Provider Limits panel or wait for the window to reset."
+            )
+        raise ChatError("no chat providers available")

@@ -30,7 +30,7 @@
     </li>
 
     {% if current_user.role_admin() %}
-    <li role="presentation" class="dropdown {{ 'active' if page in ['ai-scrub', 'ai-duplicates', 'ai-enrichment'] }}">
+    <li role="presentation" class="dropdown {{ 'active' if page in ['ai-scrub', 'ai-duplicates', 'ai-enrichment', 'ai-providers'] }}">
       <a class="dropdown-toggle" data-toggle="dropdown" role="button"
          aria-haspopup="true" aria-expanded="false">
         <span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
@@ -58,6 +58,14 @@
             Metadata Enrichment
             <small class="text-muted" style="display:block;margin-top:1px">
               LLM-suggested tags &amp; descriptions
+            </small>
+          </a>
+        </li>
+        <li class="{{ 'active' if page == 'ai-providers' }}">
+          <a href="{{ url_for('ai_bridge.providers_index') }}">
+            Provider Limits
+            <small class="text-muted" style="display:block;margin-top:1px">
+              Rate-limit LLM providers (free tiers)
             </small>
           </a>
         </li>

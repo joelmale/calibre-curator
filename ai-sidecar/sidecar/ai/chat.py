@@ -51,6 +51,9 @@ class ChatClient(ABC):
     or raise ChatError. They never leak provider-specific exceptions.
     """
 
+    # Set by the factory; used by the rate limiter to key on the provider.
+    provider_key: str = "unknown"
+
     @property
     @abstractmethod
     def model_name(self) -> str: ...

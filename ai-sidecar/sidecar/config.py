@@ -53,7 +53,7 @@ class Config:
         default_factory=lambda: [
             p.strip()
             for p in os.getenv(
-                "CHAT_PROVIDER_PRIORITY", "gemini,anthropic,openai,meta,ollama"
+                "CHAT_PROVIDER_PRIORITY", "gemini,anthropic,openai,grok,meta,ollama"
             ).split(",")
             if p.strip()
         ]
@@ -81,6 +81,15 @@ class Config:
     )
     meta_chat_model: str = field(
         default_factory=lambda: os.getenv("META_CHAT_MODEL", "Llama-4-Maverick-17B-128E-Instruct-FP8")
+    )
+    xai_api_key: str | None = field(
+        default_factory=lambda: os.getenv("XAI_API_KEY") or None
+    )
+    xai_base_url: str = field(
+        default_factory=lambda: os.getenv("XAI_BASE_URL", "https://api.x.ai/v1")
+    )
+    xai_chat_model: str = field(
+        default_factory=lambda: os.getenv("XAI_CHAT_MODEL", "grok-3")
     )
 
     shared_token: str = field(

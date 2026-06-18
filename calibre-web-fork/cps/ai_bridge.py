@@ -304,6 +304,35 @@ def duplicates_index():
     )
 
 
+# ── Chat provider rate limits ──────────────────────────────────────────────────
+
+@ai_bridge.route("/providers", methods=["GET"])
+@user_login_required
+def providers_index():
+    if not _is_admin():
+        abort(403)
+    return render_title_template(
+        "ai_providers.html",
+        title="Provider Limits",
+        page="ai-providers",
+    )
+
+
+@ai_bridge.route("/providers/save", methods=["POST"])
+@user_login_required
+def providers_save():
+    if not _is_admin():
+        return jsonify({"error": "admin_required"}), 403
+    body = request.get_json(silent=True) or {}
+    data, status = _sidecar_post("providers/limits", {
+        "provider": body.get("provider"),
+        "rpm": body.get("rpm"),
+        "rph": body.get("rph"),
+        "enabled": body.get("enabled", True),
+    })
+    return jsonify(data), status
+
+
 # ── Metadata enrichment (Feature 4) ────────────────────────────────────────────
 
 @ai_bridge.route("/enrichment", methods=["GET"])

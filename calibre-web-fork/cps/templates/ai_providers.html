@@ -1,0 +1,129 @@
+{% extends "layout.html" %}
+
+{% block header %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block body %}
+{% include '_ai_nav.html' %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-sm-10 col-sm-offset-1">
+
+      <h2>
+        Provider Limits
+        <small class="text-muted">Cap requests per minute / hour to stay within each model's free tier</small>
+      </h2>
+
+      <p class="text-muted">
+        Generation (Enrichment, Mood Wizard, Sequence Builder) tries providers
+        top to bottom. A provider that is <strong>disabled</strong> or has hit its
+        limit is skipped to the next one; local <code>ollama</code> is always the
+        final fallback. Leave a limit blank for unlimited. Counters use rolling
+        60-second / 60-minute windows and reset when the sidecar restarts.
+      </p>
+
+      <button id="refresh-btn" class="btn btn-default btn-sm" style="margin-bottom:12px">Refresh</button>
+
+      <div id="providers-table"></div>
+
+      <div id="prov-spinner" style="display:none;text-align:center;padding:24px">
+        <span class="glyphicon glyphicon-refresh" style="font-size:2em;animation:spin 1s linear infinite"></span>
+      </div>
+      <div id="prov-error" class="alert alert-danger" style="display:none"></div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.prov-input { width:90px; color:#000; }
+.prov-row td { vertical-align:middle !important; }
+.prov-usage { font-size:12px; color:#888; }
+.prov-unavail { opacity:0.55; }
+</style>
+
+<script>
+(function () {
+  'use strict';
+  function csrf() { var m = document.querySelector('meta[name="csrf-token"]'); return m ? m.content : ''; }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+  var spinner = document.getElementById('prov-spinner');
+  var errorBox = document.getElementById('prov-error');
+  var tableEl = document.getElementById('providers-table');
+
+  function showError(m) { errorBox.style.display = 'block'; errorBox.textContent = m; }
+  function clearError() { errorBox.style.display = 'none'; }
+
+  function load() {
+    clearError(); spinner.style.display = 'block';
+    fetch('/ai/api/providers', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+      .then(function (res) {
+        spinner.style.display = 'none';
+        if (!res.ok) { showError(res.data.detail || res.data.error || 'Failed to load'); return; }
+        render(res.data.providers || []);
+      })
+      .catch(function (e) { spinner.style.display = 'none'; showError('Network error: ' + e.message); });
+  }
+
+  function render(providers) {
+    if (!providers.length) { tableEl.innerHTML = '<p class="text-muted">No providers configured.</p>'; return; }
+    var rows = providers.map(function (p, i) {
+      var avail = p.local
+        ? '<span class="label label-info">local</span>'
+        : (p.available ? '<span class="label label-success">key set</span>'
+                       : '<span class="label label-default">no key</span>');
+      var cls = (!p.available && !p.local) ? 'prov-row prov-unavail' : 'prov-row';
+      return '<tr class="' + cls + '" data-provider="' + esc(p.provider) + '">' +
+        '<td><strong>' + esc(p.provider) + '</strong><br><small class="text-muted">' + esc(p.model) + '</small></td>' +
+        '<td>' + avail + '</td>' +
+        '<td><input type="checkbox" class="p-enabled" ' + (p.enabled ? 'checked' : '') + '></td>' +
+        '<td><input type="number" min="0" class="form-control input-sm prov-input p-rpm" ' +
+          'placeholder="∞" value="' + (p.rpm != null ? p.rpm : '') + '"></td>' +
+        '<td><input type="number" min="0" class="form-control input-sm prov-input p-rph" ' +
+          'placeholder="∞" value="' + (p.rph != null ? p.rph : '') + '"></td>' +
+        '<td class="prov-usage">' + p.usage.lastMinute + '/min · ' + p.usage.lastHour + '/hr</td>' +
+        '<td><button class="btn btn-primary btn-xs p-save">Save</button> ' +
+          '<span class="p-status text-muted" style="margin-left:6px"></span></td>' +
+        '</tr>';
+    }).join('');
+
+    tableEl.innerHTML =
+      '<table class="table table-condensed table-striped">' +
+      '<thead><tr><th>Provider / model</th><th>Credential</th><th>Enabled</th>' +
+      '<th>Req/min</th><th>Req/hour</th><th>Current</th><th></th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table>';
+
+    Array.prototype.forEach.call(tableEl.querySelectorAll('.prov-row'), function (tr) {
+      tr.querySelector('.p-save').addEventListener('click', function () {
+        var provider = tr.getAttribute('data-provider');
+        var rpm = tr.querySelector('.p-rpm').value;
+        var rph = tr.querySelector('.p-rph').value;
+        var enabled = tr.querySelector('.p-enabled').checked;
+        var statusEl = tr.querySelector('.p-status');
+        statusEl.textContent = 'Saving…';
+        fetch('/ai/providers/save', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': csrf() },
+          body: JSON.stringify({
+            provider: provider,
+            rpm: rpm === '' ? null : parseInt(rpm, 10),
+            rph: rph === '' ? null : parseInt(rph, 10),
+            enabled: enabled
+          })
+        })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+        .then(function (res) { statusEl.textContent = res.ok ? 'Saved ✓' : ('Error: ' + (res.data.detail || res.data.error)); })
+        .catch(function (e) { statusEl.textContent = 'Error: ' + e.message; });
+      });
+    });
+  }
+
+  document.getElementById('refresh-btn').addEventListener('click', load);
+  load();
+})();
+</script>
+{% endblock %}

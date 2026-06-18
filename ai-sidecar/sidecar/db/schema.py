@@ -171,6 +171,16 @@ CREATE TABLE IF NOT EXISTS enrichment_reviews (
     FOREIGN KEY(calibre_book_id) REFERENCES books_ai(calibre_book_id) ON DELETE CASCADE
 );
 
+-- ── Chat provider rate limits (free-tier guard) ──────────────────────────────
+
+CREATE TABLE IF NOT EXISTS provider_rate_limits (
+    provider    TEXT PRIMARY KEY,           -- gemini|anthropic|openai|grok|meta|ollama
+    rpm         INTEGER,                     -- max requests / rolling 60s (NULL = unlimited)
+    rph         INTEGER,                     -- max requests / rolling 3600s (NULL = unlimited)
+    enabled     INTEGER NOT NULL DEFAULT 1,  -- 0 = never use this provider
+    updated_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_enrichment_queue_status
     ON enrichment_queue(status);
 
