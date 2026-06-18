@@ -55,6 +55,7 @@ services:
       - OPENAI_EMBED_MODEL=text-embedding-3-small
       - SCAN_INTERVAL_SECONDS=300
       - MAX_EXTRACTED_CHARS_PER_BOOK=120000
+      - LOG_LEVEL=INFO
     volumes:
       - /mnt/books-nas-vol3/calibre:/calibre-library:ro
       - ai_sidecar_state:/state

@@ -5,6 +5,7 @@ import os
 from flask import Flask
 
 from .config import get_config
+from .logging_config import configure_logging
 from .db.schema import init_db
 from .api.health import health_bp
 from .api.status import status_bp
@@ -15,6 +16,7 @@ from .api.recommendations import recommendations_bp
 
 
 def create_app() -> Flask:
+    configure_logging()
     app = Flask(__name__)
     config = get_config()
 

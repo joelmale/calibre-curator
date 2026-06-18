@@ -72,35 +72,42 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
             run_id = IngestionRunRepository.start(conn)
 
         try:
+            logger.info("Run #%d — scanning Calibre library at %s", run_id, config.calibre_metadata_db)
             all_records = list(reader.list_books())
             scanned = len(all_records)
+            logger.info("Run #%d — found %d books in library", run_id, scanned)
 
             known = BookAiRepository.get_known_book_ids(conn)
             changed_records, _ = detect_changed_books(all_records, known)
+            logger.info("Run #%d — %d book(s) new or changed", run_id, len(changed_records))
 
             if limit is not None and limit > 0:
                 changed_records = changed_records[:limit]
-                logger.info("Limiting run to first %d changed book(s)", limit)
+                logger.info("Run #%d — limiting to first %d book(s)", run_id, limit)
 
             current_ids = {r.book_id for r in all_records}
             removed_count = BookAiRepository.delete_removed(conn, current_ids)
             if removed_count:
-                logger.info("Removed %d stale book(s) from index", removed_count)
+                logger.info("Run #%d — removed %d stale book(s) from index", run_id, removed_count)
 
-            for record in changed_records:
+            total_to_process = len(changed_records)
+            for idx, record in enumerate(changed_records, 1):
+                logger.info(
+                    "Run #%d — [%d/%d] processing book %d: %s",
+                    run_id, idx, total_to_process, record.book_id, record.title,
+                )
                 try:
                     _process_book(conn, record, config, provider, store)
                     changed += 1
                 except Exception as exc:
                     logger.error(
-                        "Failed to process book %d (%s): %s",
-                        record.book_id, record.title, exc,
+                        "Run #%d — failed book %d (%s): %s",
+                        run_id, record.book_id, record.title, exc,
                     )
                     BookAiRepository.mark_status(conn, record.book_id, "failed", str(exc))
                     errors += 1
 
-            # Embed any chunks that are still pending (e.g. from a previous
-            # failed run that chunked but didn't finish embedding)
+            logger.info("Run #%d — embedding pending chunks…", run_id)
             embedded = _embed_pending(conn, provider, store)
 
             status = "completed" if errors == 0 else "partial"
@@ -113,7 +120,7 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
                 errors=errors,
             )
             logger.info(
-                "Ingestion run #%d: %d scanned, %d changed, %d embedded, %d errors — %s",
+                "Run #%d done — %d scanned, %d changed, %d embedded, %d errors — %s",
                 run_id, scanned, changed, embedded, errors, status,
             )
 
@@ -176,7 +183,7 @@ def _process_book(conn, record, config, provider, store) -> None:
     chunks = chunk_text(best_text, record.book_id)
     ChunkRepository.insert_batch(conn, record.book_id, best_source, chunks)
     BookAiRepository.mark_status(conn, record.book_id, "chunked")
-    logger.debug("Book %d: %d chunks written", record.book_id, len(chunks))
+    logger.info("Book %d: extracted %d chars from %s, wrote %d chunks", record.book_id, len(best_text), best_source, len(chunks))
 
 
 def _embed_pending(conn, provider, store) -> int:
@@ -208,6 +215,7 @@ def _embed_pending(conn, provider, store) -> int:
             documents=texts,
         )
         ChunkRepository.mark_embedded_batch(conn, uids, provider.model_name)
+        logger.info("Embedded batch of %d chunks (total so far: %d)", len(uids), total + len(uids))
 
         # Mark books as fully indexed once all their chunks are embedded
         for book_id in set(book_ids):
