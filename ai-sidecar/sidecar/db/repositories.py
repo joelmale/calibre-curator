@@ -81,12 +81,37 @@ class BookAiRepository:
 
     @staticmethod
     def get_incomplete_book_ids(conn: sqlite3.Connection) -> set[int]:
-        """Return IDs of books that started processing but never reached 'indexed'."""
+        """Return IDs of all non-indexed books so they are retried on every run.
+
+        Lifecycle: books enter as 'pending' (upsert), advance through
+        'extracting' → 'chunked' → 'indexed' as the pipeline progresses, or
+        land on 'failed' if an error occurs.  We include 'pending' here so
+        that books which were inserted in a prior scan but never processed
+        (the common stuck state) are always re-queued.  Within a single run,
+        processed books reach 'indexed' or 'failed' before the next run
+        starts, so including 'pending' causes no harmful double-processing.
+        """
         rows = conn.execute(
             "SELECT calibre_book_id FROM books_ai "
-            "WHERE ingestion_status NOT IN ('indexed', 'pending')"
+            "WHERE ingestion_status != 'indexed'"
         ).fetchall()
         return {int(r["calibre_book_id"]) for r in rows}
+
+    @staticmethod
+    def get_recent_failures(
+        conn: sqlite3.Connection, limit: int = 25
+    ) -> list[sqlite3.Row]:
+        """Return the most recently-updated books with ingestion_status='failed'."""
+        return conn.execute(
+            """
+            SELECT calibre_book_id, title, ingestion_error, updated_at
+            FROM books_ai
+            WHERE ingestion_status = 'failed'
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
 
     @staticmethod
     def get_status_breakdown(conn: sqlite3.Connection) -> dict[str, int]:

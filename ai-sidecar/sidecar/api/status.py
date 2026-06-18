@@ -100,3 +100,22 @@ def get_status():
         },
         "lastIngestionRun": last_run,
     })
+
+
+@status_bp.route("/status/failures")
+@require_bearer_token
+def get_recent_failures():
+    """Return up to 25 recently-failed books for the dashboard error list."""
+    with get_db() as conn:
+        rows = BookAiRepository.get_recent_failures(conn, limit=25)
+    return jsonify({
+        "failures": [
+            {
+                "calibreBookId": r["calibre_book_id"],
+                "title":         r["title"],
+                "error":         r["ingestion_error"],
+                "failedAt":      r["updated_at"],
+            }
+            for r in rows
+        ]
+    })

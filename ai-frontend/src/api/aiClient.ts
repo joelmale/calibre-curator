@@ -3,6 +3,7 @@ import type {
   IAiApiClient,
   ICollectionsResponse,
   IIngestionTriggerResponse,
+  IIngestionFailuresResponse,
   IRecommendationsResponse,
   ISemanticSearchRequest,
   ISemanticSearchResponse,
@@ -23,6 +24,10 @@ export class AiApiClient implements IAiApiClient {
 
   public getStatus(): Promise<ApiResult<IAiStatusResponse>> {
     return this.http.get<IAiStatusResponse>("/status");
+  }
+
+  public getRecentFailures(): Promise<ApiResult<IIngestionFailuresResponse>> {
+    return this.http.get<IIngestionFailuresResponse>("/status/failures");
   }
 
   public triggerIngestion(limit?: number | null): Promise<ApiResult<IIngestionTriggerResponse>> {

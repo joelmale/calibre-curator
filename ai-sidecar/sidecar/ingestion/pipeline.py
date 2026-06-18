@@ -12,9 +12,11 @@ from ..db.repositories import (
     IngestionRunRepository,
 )
 
-# Books whose status is not 'indexed' or 'pending' are always retried —
-# they started processing in a prior run but didn't finish.
-_RETRY_STATUSES = frozenset({"failed", "extracting", "chunked"})
+# All non-indexed books are re-queued on every run (pending, failed,
+# extracting, chunked).  This ensures books that were registered but never
+# processed ('pending') converge to 'indexed' rather than being skipped
+# forever by the changed-book detector.
+_RETRY_STATUSES = frozenset({"pending", "failed", "extracting", "chunked"})
 from ..db.session import get_db
 from ..embeddings import get_embedding_provider
 from ..vectors import get_vector_store
@@ -84,7 +86,10 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
             known = BookAiRepository.get_known_book_ids(conn)
             changed_records, _ = detect_changed_books(all_records, known)
 
-            # Also retry any book that started but never finished in a prior run
+            # Re-queue all non-indexed books (pending, failed, extracting, chunked).
+            # This is the convergence path: books stuck at 'pending' that were
+            # registered in a prior scan but never reached 'indexed' are picked
+            # up here rather than being skipped by the changed-book detector.
             incomplete_ids = BookAiRepository.get_incomplete_book_ids(conn)
             if incomplete_ids:
                 already_queued = {r.book_id for r in changed_records}
@@ -94,7 +99,7 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
                 ]
                 if retry_records:
                     logger.info(
-                        "Run #%d — %d book(s) in retry queue (failed/stalled in prior run)",
+                        "Run #%d — %d book(s) pending/incomplete → queued for processing",
                         run_id, len(retry_records),
                     )
                 changed_records = changed_records + retry_records

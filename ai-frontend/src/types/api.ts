@@ -107,8 +107,20 @@ export interface ISequencesListResponse {
   readonly sequences: readonly ISavedSequence[];
 }
 
+export interface IIngestionFailure {
+  readonly calibreBookId: number;
+  readonly title: string | null;
+  readonly error: string | null;
+  readonly failedAt: string | null;
+}
+
+export interface IIngestionFailuresResponse {
+  readonly failures: readonly IIngestionFailure[];
+}
+
 export interface IAiApiClient {
   getStatus(): Promise<ApiResult<IAiStatusResponse>>;
+  getRecentFailures(): Promise<ApiResult<IIngestionFailuresResponse>>;
   triggerIngestion(limit?: number | null): Promise<ApiResult<IIngestionTriggerResponse>>;
   searchSemantic(request: ISemanticSearchRequest): Promise<ApiResult<ISemanticSearchResponse>>;
   listCollections(): Promise<ApiResult<ICollectionsResponse>>;

@@ -5,6 +5,7 @@ import { createAiSearchPanel } from "../organisms/AiSearchPanel";
 import { createAiStatusPanel } from "../organisms/AiStatusPanel";
 import { createAiIngestionControls } from "../organisms/AiIngestionControls";
 import { createAiDashboardTemplate } from "../templates/AiDashboardTemplate";
+import { createAiRecentFailures } from "../molecules/AiRecentFailures";
 import { errorMessage } from "../../utils/result";
 
 export class AiDashboardPage {
@@ -36,17 +37,38 @@ export class AiDashboardPage {
     const holder = this.statusHolder;
     if (!holder) return;
 
-    const result = await this.client.getStatus();
+    // Fetch status and failures in parallel
+    const [statusResult, failuresResult] = await Promise.all([
+      this.client.getStatus(),
+      this.client.getRecentFailures(),
+    ]);
+
     holder.innerHTML = "";
 
-    if (!result.ok) {
+    if (!statusResult.ok) {
       holder.appendChild(
-        createAiAlert(`Could not reach sidecar: ${errorMessage(result.error)}`, "danger"),
+        createAiAlert(`Could not reach sidecar: ${errorMessage(statusResult.error)}`, "danger"),
       );
       return;
     }
 
-    holder.appendChild(createAiStatusPanel(result.data));
+    holder.appendChild(createAiStatusPanel(statusResult.data));
+
+    // Show recent failures panel (only if there are any)
+    if (failuresResult.ok && failuresResult.data.failures.length > 0) {
+      const failuresEl = createAiRecentFailures(failuresResult.data.failures);
+      if (failuresEl.childNodes.length > 0) {
+        // Wrap in a row so it aligns with the status panel columns
+        const row = document.createElement("div");
+        row.className = "row";
+        const col = document.createElement("div");
+        col.className = "col-sm-12";
+        col.appendChild(failuresEl);
+        row.appendChild(col);
+        holder.appendChild(row);
+      }
+    }
+
     holder.appendChild(
       createAiIngestionControls(this.client, () => {
         // Refresh status 3 s after triggering so the new run row appears
