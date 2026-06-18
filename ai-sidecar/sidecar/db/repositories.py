@@ -184,6 +184,60 @@ class ChunkRepository:
             for c in chunks
         ])
 
+    @staticmethod
+    def get_unembedded(
+        conn: sqlite3.Connection,
+        limit: int = 500,
+    ) -> list[sqlite3.Row]:
+        return conn.execute("""
+            SELECT chunk_uid, calibre_book_id, text, heading
+            FROM book_chunks
+            WHERE vector_id IS NULL
+            ORDER BY calibre_book_id, chunk_index
+            LIMIT ?
+        """, (limit,)).fetchall()
+
+    @staticmethod
+    def get_book_chunks(
+        conn: sqlite3.Connection,
+        calibre_book_id: int,
+    ) -> list[sqlite3.Row]:
+        return conn.execute("""
+            SELECT chunk_uid, text, heading
+            FROM book_chunks
+            WHERE calibre_book_id = ?
+            ORDER BY chunk_index
+        """, (calibre_book_id,)).fetchall()
+
+    @staticmethod
+    def mark_embedded_batch(
+        conn: sqlite3.Connection,
+        chunk_uids: list[str],
+        model_name: str,
+    ) -> None:
+        now = _now()
+        conn.executemany("""
+            UPDATE book_chunks
+            SET vector_id = chunk_uid, embedding_model = ?, embedded_at = ?
+            WHERE chunk_uid = ?
+        """, [(model_name, now, uid) for uid in chunk_uids])
+
+
+class BookAiLookup:
+    @staticmethod
+    def get_by_ids(
+        conn: sqlite3.Connection,
+        calibre_book_ids: list[int],
+    ) -> dict[int, sqlite3.Row]:
+        if not calibre_book_ids:
+            return {}
+        placeholders = ",".join("?" * len(calibre_book_ids))
+        rows = conn.execute(
+            f"SELECT * FROM books_ai WHERE calibre_book_id IN ({placeholders})",
+            calibre_book_ids,
+        ).fetchall()
+        return {int(r["calibre_book_id"]): r for r in rows}
+
 
 class IngestionRunRepository:
     @staticmethod
