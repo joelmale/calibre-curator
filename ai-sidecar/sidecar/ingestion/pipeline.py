@@ -11,6 +11,10 @@ from ..db.repositories import (
     FormatAiRepository,
     IngestionRunRepository,
 )
+
+# Books whose status is not 'indexed' or 'pending' are always retried —
+# they started processing in a prior run but didn't finish.
+_RETRY_STATUSES = frozenset({"failed", "extracting", "chunked"})
 from ..db.session import get_db
 from ..embeddings import get_embedding_provider
 from ..vectors import get_vector_store
@@ -79,7 +83,23 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
 
             known = BookAiRepository.get_known_book_ids(conn)
             changed_records, _ = detect_changed_books(all_records, known)
-            logger.info("Run #%d — %d book(s) new or changed", run_id, len(changed_records))
+
+            # Also retry any book that started but never finished in a prior run
+            incomplete_ids = BookAiRepository.get_incomplete_book_ids(conn)
+            if incomplete_ids:
+                already_queued = {r.book_id for r in changed_records}
+                retry_records = [
+                    r for r in all_records
+                    if r.book_id in incomplete_ids and r.book_id not in already_queued
+                ]
+                if retry_records:
+                    logger.info(
+                        "Run #%d — %d book(s) in retry queue (failed/stalled in prior run)",
+                        run_id, len(retry_records),
+                    )
+                changed_records = changed_records + retry_records
+
+            logger.info("Run #%d — %d book(s) new or changed (incl. retries)", run_id, len(changed_records))
 
             if limit is not None and limit > 0:
                 changed_records = changed_records[:limit]

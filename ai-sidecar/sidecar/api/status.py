@@ -6,7 +6,7 @@ import requests
 
 from ..config import get_config
 from ..db.calibre_reader import CalibreReader
-from ..db.repositories import IngestionRunRepository
+from ..db.repositories import BookAiRepository, IngestionRunRepository
 from ..db.session import get_db
 from ..security import require_bearer_token
 
@@ -27,12 +27,14 @@ def get_status():
             db_readable = False
 
     indexed_count = 0
+    status_breakdown: dict[str, int] = {}
     last_run = None
     with get_db() as conn:
         row = conn.execute(
             "SELECT COUNT(*) AS n FROM books_ai WHERE ingestion_status = 'indexed'"
         ).fetchone()
         indexed_count = row["n"] if row else 0
+        status_breakdown = BookAiRepository.get_status_breakdown(conn)
         last_run = IngestionRunRepository.get_latest(conn)
 
     embedding_model = (
@@ -73,6 +75,7 @@ def get_status():
             "bookCount":          calibre_count,
             "indexedBookCount":   indexed_count,
             "pendingBookCount":   max(0, calibre_count - indexed_count),
+            "statusBreakdown":    status_breakdown,
         },
         "embedding": {
             "provider": config.embedding_provider,

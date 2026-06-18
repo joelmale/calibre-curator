@@ -21,11 +21,27 @@ export function createAiStatusPanel(s: IAiStatusResponse): HTMLElement {
   progressCell.innerHTML = `${s.library.indexedBookCount.toLocaleString()} / ${s.library.bookCount.toLocaleString()}`;
   progressCell.appendChild(createAiProgressBar(indexedPct));
 
+  // Build breakdown string from statusBreakdown map
+  const bd = s.library.statusBreakdown ?? {};
+  const breakdownEl = document.createElement("span");
+  const STATUS_ORDER = ["indexed", "chunked", "extracting", "failed", "pending"];
+  const parts = STATUS_ORDER
+    .filter(k => bd[k])
+    .map(k => `${bd[k]?.toLocaleString()} ${k}`);
+  // include any unexpected statuses too
+  Object.keys(bd).filter(k => !STATUS_ORDER.includes(k)).forEach(k => {
+    parts.push(`${bd[k]?.toLocaleString()} ${k}`);
+  });
+  breakdownEl.textContent = parts.length ? parts.join(" · ") : "—";
+  breakdownEl.style.fontSize = "12px";
+  breakdownEl.style.color = "#888";
+
   const libraryTable = createAiStatusTable([
     ["Calibre metadata.db", dbBadge],
     ["Total books", s.library.bookCount.toLocaleString()],
     ["Indexed", progressCell],
     ["Pending", s.library.pendingBookCount.toLocaleString()],
+    ["Breakdown", breakdownEl],
   ]);
 
   const libraryPanel = _panel("Library Index", libraryTable);

@@ -80,6 +80,22 @@ class BookAiRepository:
         })
 
     @staticmethod
+    def get_incomplete_book_ids(conn: sqlite3.Connection) -> set[int]:
+        """Return IDs of books that started processing but never reached 'indexed'."""
+        rows = conn.execute(
+            "SELECT calibre_book_id FROM books_ai "
+            "WHERE ingestion_status NOT IN ('indexed', 'pending')"
+        ).fetchall()
+        return {int(r["calibre_book_id"]) for r in rows}
+
+    @staticmethod
+    def get_status_breakdown(conn: sqlite3.Connection) -> dict[str, int]:
+        rows = conn.execute(
+            "SELECT ingestion_status, COUNT(*) AS n FROM books_ai GROUP BY ingestion_status"
+        ).fetchall()
+        return {r["ingestion_status"]: r["n"] for r in rows}
+
+    @staticmethod
     def delete_removed(conn: sqlite3.Connection, current_ids: set[int]) -> int:
         """Delete any tracked books whose ID is not in current_ids. Returns count deleted."""
         if not current_ids:

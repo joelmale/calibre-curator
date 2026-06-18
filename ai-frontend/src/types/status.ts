@@ -13,6 +13,7 @@ export interface ILibraryIndexStatus {
   readonly bookCount: number;
   readonly indexedBookCount: number;
   readonly pendingBookCount: number;
+  readonly statusBreakdown: Readonly<Record<string, number>>;
 }
 
 export interface IEmbeddingStatus {
