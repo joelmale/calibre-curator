@@ -12,55 +12,22 @@ const root = document.getElementById("ai-curation-root");
 
 interface IRoute {
   readonly hash: string;
-  readonly label: string;
   mount(container: HTMLElement): void;
 }
 
+// Hash routes for the SPA. Navigation between them is driven by the shared
+// server-rendered tab bar (_ai_nav.html); this just maps the URL hash to a page.
 const routes: readonly IRoute[] = [
-  {
-    hash: "",
-    label: "Discover",
-    mount: (c) => new AiDashboardPage(c, client).mount(),
-  },
-  {
-    hash: "#mood",
-    label: "Mood Wizard",
-    mount: (c) => new AiMoodPage(c, client).mount(),
-  },
-  {
-    hash: "#sequences",
-    label: "Sequence Builder",
-    mount: (c) => new AiSequencePage(c, client).mount(),
-  },
+  { hash: "", mount: (c) => new AiDashboardPage(c, client).mount() },
+  { hash: "#mood", mount: (c) => new AiMoodPage(c, client).mount() },
+  { hash: "#sequences", mount: (c) => new AiSequencePage(c, client).mount() },
 ];
-
-function buildNav(active: string): HTMLElement {
-  const nav = document.createElement("ul");
-  nav.className = "nav nav-pills ai-spa-nav";
-  nav.style.marginBottom = "20px";
-  for (const route of routes) {
-    const li = document.createElement("li");
-    li.setAttribute("role", "presentation");
-    if (route.hash === active) li.className = "active";
-    const a = document.createElement("a");
-    a.href = route.hash || "#";
-    a.textContent = route.label;
-    li.appendChild(a);
-    nav.appendChild(li);
-  }
-  return nav;
-}
 
 function render(container: HTMLElement): void {
   const active = window.location.hash;
   const route = routes.find((r) => r.hash === active) ?? routes[0]!;
-
   container.innerHTML = "";
-  container.appendChild(buildNav(route.hash));
-
-  const pageHolder = document.createElement("div");
-  container.appendChild(pageHolder);
-  route.mount(pageHolder);
+  route.mount(container);
 }
 
 if (root instanceof HTMLElement) {
