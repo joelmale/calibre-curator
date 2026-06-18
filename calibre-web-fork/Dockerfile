@@ -6,6 +6,7 @@ RUN pip install --no-cache-dir requests
 # Copy bridge module and compiled frontend assets
 COPY cps/ai_bridge.py /app/calibre-web/cps/ai_bridge.py
 COPY cps/templates/ai_dashboard.html /app/calibre-web/cps/templates/ai_dashboard.html
+COPY cps/templates/ai_scrub.html /app/calibre-web/cps/templates/ai_scrub.html
 COPY cps/static/ai/ /app/calibre-web/cps/static/ai/
 
 # Patch main.py: +2 lines (import + register blueprint)

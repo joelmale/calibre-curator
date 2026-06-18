@@ -5,6 +5,13 @@
 {% endblock %}
 
 {% block body %}
+{% if current_user.role_admin() %}
+<div style="text-align:right;margin-bottom:8px">
+  <a href="{{ url_for('ai_bridge.scrub_index') }}" class="btn btn-default btn-xs">
+    &#10005; Format Scrub
+  </a>
+</div>
+{% endif %}
 <div id="ai-curation-root"
      data-api-base="{{ url_for('ai_bridge.proxy_api', subpath='') }}">
   <noscript>

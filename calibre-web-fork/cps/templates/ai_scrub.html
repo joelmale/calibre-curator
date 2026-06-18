@@ -1,0 +1,343 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-sm-10 col-sm-offset-1">
+
+      <h2>
+        <span aria-hidden="true">&#10005;</span>
+        Format Scrub
+        <small>Bulk-remove non-canonical formats from your library</small>
+      </h2>
+
+      {% if error %}
+      <div class="alert alert-danger">
+        <strong>Cannot read Calibre library:</strong> {{ error }}
+      </div>
+      {% endif %}
+
+      {% if not calibredb_available %}
+      <div class="alert alert-warning">
+        <strong>calibredb not found.</strong>
+        Dry-run analysis will still work, but execution is disabled until
+        <code>calibredb</code> is available in this container
+        (add <code>DOCKER_MODS=linuxserver/mods:universal-calibre</code> to calibre-web).
+      </div>
+      {% endif %}
+
+      {# ── Step 1: configure ──────────────────────────────────────────── #}
+      <div class="panel panel-default">
+        <div class="panel-heading"><strong>Step 1 — Configure</strong></div>
+        <div class="panel-body">
+          <form id="scrub-form">
+            <div class="form-group">
+              <label for="keep-format">Format to keep (canonical)</label>
+              <select class="form-control" id="keep-format" name="keepFormat" style="max-width:260px">
+                {% if formats %}
+                  {% for fmt in formats %}
+                  <option value="{{ fmt.format }}"
+                    {% if fmt.format == 'EPUB' %}selected{% endif %}>
+                    {{ fmt.format }} &nbsp;({{ fmt.count }} books)
+                  </option>
+                  {% endfor %}
+                {% else %}
+                  <option value="">— no formats found —</option>
+                {% endif %}
+              </select>
+              <p class="help-block">
+                Books that do <strong>not</strong> have this format will never be touched.
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label for="scrub-limit">Limit (max books to process per run)</label>
+              <input type="number" class="form-control" id="scrub-limit"
+                     name="limit" value="50" min="1" max="500"
+                     style="max-width:120px">
+              <p class="help-block">Maximum 500 per run. Use smaller batches to preview safely.</p>
+            </div>
+
+            <div class="checkbox">
+              <label>
+                <input type="checkbox" id="dry-run" checked>
+                <strong>Dry run</strong> — analyse only, do not delete anything
+              </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" {% if not formats %}disabled{% endif %}>
+              Analyse
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {# ── Step 2: plan results ───────────────────────────────────────── #}
+      <div id="plan-section" style="display:none">
+        <div class="panel panel-info">
+          <div class="panel-heading"><strong>Step 2 — Plan</strong></div>
+          <div class="panel-body">
+            <div id="plan-summary"></div>
+            <div id="plan-table-wrapper" style="margin-top:12px"></div>
+          </div>
+        </div>
+
+        {# ── Step 3: execute (hidden until plan loaded, disabled in dry-run) #}
+        <div id="execute-section" style="display:none">
+          <div class="panel panel-warning">
+            <div class="panel-heading"><strong>Step 3 — Execute</strong></div>
+            <div class="panel-body">
+              <p class="text-warning">
+                <strong>This will permanently delete files and Calibre metadata.</strong>
+                Only books that have the canonical format are affected.
+                Books without it are skipped automatically.
+              </p>
+              <button id="execute-btn" class="btn btn-danger">
+                Execute scrub &nbsp;<span id="execute-count"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# ── Step 4: results ────────────────────────────────────────────── #}
+      <div id="result-section" style="display:none">
+        <div class="panel panel-success">
+          <div class="panel-heading"><strong>Scrub Results</strong></div>
+          <div class="panel-body" id="result-body"></div>
+        </div>
+      </div>
+
+      <div id="error-section" style="display:none">
+        <div class="alert alert-danger" id="error-body"></div>
+      </div>
+
+      <div id="spinner-section" style="display:none;text-align:center;padding:24px">
+        <span class="glyphicon glyphicon-refresh" style="font-size:2em;animation:spin 1s linear infinite"></span>
+        <p id="spinner-label" style="margin-top:8px;color:#888"></p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+.fmt-badge {
+  display:inline-block;
+  padding:2px 7px;
+  border-radius:3px;
+  font-size:11px;
+  font-weight:bold;
+  margin:1px;
+}
+.fmt-keep  { background:#dff0d8; color:#3c763d; border:1px solid #d6e9c6; }
+.fmt-remove { background:#f2dede; color:#a94442; border:1px solid #ebccd1; }
+</style>
+
+<script>
+(function () {
+  'use strict';
+
+  var planData = null;
+
+  var form         = document.getElementById('scrub-form');
+  var planSection  = document.getElementById('plan-section');
+  var planSummary  = document.getElementById('plan-summary');
+  var planTable    = document.getElementById('plan-table-wrapper');
+  var execSection  = document.getElementById('execute-section');
+  var execBtn      = document.getElementById('execute-btn');
+  var execCount    = document.getElementById('execute-count');
+  var resultSection = document.getElementById('result-section');
+  var resultBody   = document.getElementById('result-body');
+  var errorSection = document.getElementById('error-section');
+  var errorBody    = document.getElementById('error-body');
+  var spinner      = document.getElementById('spinner-section');
+  var spinnerLabel = document.getElementById('spinner-label');
+  var dryRunBox    = document.getElementById('dry-run');
+
+  function showSpinner(msg) {
+    spinner.style.display = 'block';
+    spinnerLabel.textContent = msg || '';
+    planSection.style.display = 'none';
+    resultSection.style.display = 'none';
+    errorSection.style.display = 'none';
+  }
+
+  function hideSpinner() {
+    spinner.style.display = 'none';
+  }
+
+  function showError(msg) {
+    errorBody.textContent = msg;
+    errorSection.style.display = 'block';
+  }
+
+  function fmtBadge(fmt, keep) {
+    return '<span class="fmt-badge ' + (keep ? 'fmt-keep' : 'fmt-remove') + '">' +
+      escapeHtml(fmt) + '</span>';
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function renderPlan(data) {
+    planData = data;
+    var s = data.summary;
+    var isDryRun = dryRunBox.checked;
+
+    planSummary.innerHTML =
+      '<table class="table table-condensed" style="max-width:480px">' +
+      '<tr><th>Total books in library</th><td>' + s.totalBooks + '</td></tr>' +
+      '<tr><th>Books with <strong>' + escapeHtml(data.keepFormat) + '</strong></th>' +
+        '<td>' + (s.totalBooks - s.protectedBooks) + '</td></tr>' +
+      '<tr><th>Protected (no ' + escapeHtml(data.keepFormat) + ')</th>' +
+        '<td class="text-muted">' + s.protectedBooks + ' — will not be touched</td></tr>' +
+      '<tr class="active"><th>Eligible for scrub (total)</th><td>' + s.eligibleBooks + '</td></tr>' +
+      '<tr class="warning"><th>In this plan (limit ' + data.limit + ')</th>' +
+        '<td><strong>' + s.planCount + ' books, ' + s.planRemovals + ' formats</strong></td></tr>' +
+      '</table>';
+
+    if (isDryRun) {
+      planSummary.innerHTML +=
+        '<div class="alert alert-info"><strong>Dry run:</strong> ' +
+        'No files will be deleted. Uncheck "Dry run" to enable execution.</div>';
+    }
+
+    if (s.planCount === 0) {
+      planTable.innerHTML = '<p class="text-muted">No books need scrubbing for this format.</p>';
+      execSection.style.display = 'none';
+    } else {
+      var rows = data.plan.map(function (book) {
+        var keeps   = book.keepFormats.map(function (f) { return fmtBadge(f, true); }).join(' ');
+        var removes = book.removeFormats.map(function (f) { return fmtBadge(f, false); }).join(' ');
+        return '<tr>' +
+          '<td>' + book.bookId + '</td>' +
+          '<td>' + escapeHtml(book.title) + '<br><small class="text-muted">' +
+            escapeHtml(book.authorSort) + '</small></td>' +
+          '<td>' + keeps + '</td>' +
+          '<td>' + removes + '</td>' +
+          '</tr>';
+      }).join('');
+
+      planTable.innerHTML =
+        '<p><small>Showing first ' + data.plan.length + ' of ' + s.eligibleBooks + ' eligible books.</small></p>' +
+        '<div style="max-height:400px;overflow-y:auto">' +
+        '<table class="table table-condensed table-striped table-bordered">' +
+        '<thead><tr><th>#</th><th>Title / Author</th><th>Keep</th><th>Remove</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+        '</table></div>';
+
+      if (!isDryRun) {
+        execCount.textContent = '(' + s.planCount + ' books, ' + s.planRemovals + ' formats)';
+        execSection.style.display = 'block';
+      } else {
+        execSection.style.display = 'none';
+      }
+    }
+
+    planSection.style.display = 'block';
+  }
+
+  function renderResult(data) {
+    var errHtml = '';
+    if (data.errors && data.errors.length > 0) {
+      var errRows = data.errors.map(function (e) {
+        return '<tr><td>' + e.bookId + '</td><td>' + escapeHtml(e.title) + '</td>' +
+          '<td>' + escapeHtml(e.format) + '</td><td>' + escapeHtml(e.error) + '</td></tr>';
+      }).join('');
+      errHtml = '<h4>Errors (' + data.errors.length + ')</h4>' +
+        '<table class="table table-condensed table-bordered">' +
+        '<thead><tr><th>Book ID</th><th>Title</th><th>Format</th><th>Error</th></tr></thead>' +
+        '<tbody>' + errRows + '</tbody></table>';
+    }
+
+    resultBody.innerHTML =
+      '<table class="table table-condensed" style="max-width:420px">' +
+      '<tr><th>Keep format</th><td><strong>' + escapeHtml(data.keepFormat) + '</strong></td></tr>' +
+      '<tr><th>Books processed</th><td>' + data.processedBooks + '</td></tr>' +
+      '<tr><th>Formats removed</th><td>' + data.formatsRemoved + '</td></tr>' +
+      '<tr><th>Errors</th><td>' + data.errorCount + '</td></tr>' +
+      '<tr><th>Executed at</th><td>' + escapeHtml(data.executedAt) + '</td></tr>' +
+      '</table>' + errHtml;
+
+    resultSection.style.display = 'block';
+    planSection.style.display = 'none';
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    var keepFormat = document.getElementById('keep-format').value;
+    var limit = parseInt(document.getElementById('scrub-limit').value, 10) || 50;
+
+    showSpinner('Analysing library…');
+
+    fetch('/ai/scrub/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ keepFormat: keepFormat, limit: limit })
+    })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+    .then(function (res) {
+      hideSpinner();
+      if (!res.ok) {
+        showError('Plan error: ' + (res.data.error || JSON.stringify(res.data)));
+      } else {
+        renderPlan(res.data);
+      }
+    })
+    .catch(function (err) {
+      hideSpinner();
+      showError('Network error: ' + err.message);
+    });
+  });
+
+  execBtn.addEventListener('click', function () {
+    if (!planData) return;
+
+    var confirmMsg =
+      'This will permanently remove ' + planData.summary.planRemovals + ' format file(s) ' +
+      'from ' + planData.summary.planCount + ' book(s).\n\n' +
+      'The canonical format (' + planData.keepFormat + ') will be preserved.\n\n' +
+      'Are you sure?';
+
+    if (!window.confirm(confirmMsg)) return;
+
+    execBtn.disabled = true;
+    showSpinner('Executing scrub… this may take a while.');
+
+    fetch('/ai/scrub/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        keepFormat: planData.keepFormat,
+        limit: planData.limit,
+        confirm: true
+      })
+    })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+    .then(function (res) {
+      hideSpinner();
+      execBtn.disabled = false;
+      if (!res.ok) {
+        showError('Execute error: ' + (res.data.error || JSON.stringify(res.data)));
+      } else {
+        renderResult(res.data);
+      }
+    })
+    .catch(function (err) {
+      hideSpinner();
+      execBtn.disabled = false;
+      showError('Network error: ' + err.message);
+    });
+  });
+
+})();
+</script>
+{% endblock %}
