@@ -1,6 +1,6 @@
 # Migration Plan: Calibre-Web fork → Calibre-Web-Automated (CWA)
 
-**Status:** In progress (2026-06-18) · **Date:** 2026-06-18 · **Owner:** JoelN
+**Status:** Deployed 2026-06-18 (commit 6a994db, live via Dockhand stack 6) · **Date:** 2026-06-18 · **Owner:** JoelN
 
 ## 1. Why this is low-risk
 
