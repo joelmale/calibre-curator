@@ -2,11 +2,64 @@
 
 {% block header %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.prov-input { width: 90px; }
+.prov-row td { vertical-align: middle !important; }
+.prov-usage { font-size: 12px; color: var(--ai-color-text-muted, #888); }
+.prov-unavail { opacity: 0.55; }
+
+/* Dark-theme overrides for Bootstrap components on this page */
+[data-ai-theme="dark"] .table {
+  color: var(--ai-color-text);
+}
+[data-ai-theme="dark"] .table > tbody > tr > td,
+[data-ai-theme="dark"] .table > thead > tr > th {
+  border-color: var(--ai-color-table-border);
+  color: var(--ai-color-text);
+}
+[data-ai-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: var(--ai-color-table-stripe);
+}
+[data-ai-theme="dark"] .text-muted {
+  color: var(--ai-color-text-muted) !important;
+}
+[data-ai-theme="dark"] .form-control {
+  background-color: var(--ai-color-input-bg);
+  color: var(--ai-color-input-text);
+  border-color: var(--ai-color-input-border);
+}
+[data-ai-theme="dark"] .alert-danger {
+  color: var(--ai-color-danger);
+  background-color: var(--ai-color-danger-bg);
+  border-color: var(--ai-color-danger-border);
+}
+/* Label badges */
+[data-ai-theme="dark"] .label-success {
+  background-color: var(--ai-color-success);
+  color: var(--ai-color-success-bg);
+}
+[data-ai-theme="dark"] .label-danger {
+  background-color: var(--ai-color-danger);
+  color: var(--ai-color-danger-bg);
+}
+[data-ai-theme="dark"] .label-info {
+  background-color: var(--ai-color-info);
+  color: var(--ai-color-info-bg);
+}
+[data-ai-theme="dark"] .label-default {
+  background-color: var(--ai-color-surface-alt);
+  color: var(--ai-color-text-muted);
+  border: 1px solid var(--ai-color-border);
+}
+</style>
 {% endblock %}
 
 {% block body %}
 {% include '_ai_nav.html' %}
-<div class="container-fluid">
+<div class="container-fluid ai-providers-page"
+     data-ai-theme="{{ 'dark' if g.current_theme == 1 else 'light' }}">
   <div class="row">
     <div class="col-sm-10 col-sm-offset-1">
 
@@ -36,17 +89,17 @@
   </div>
 </div>
 
-<style>
-@keyframes spin { to { transform: rotate(360deg); } }
-.prov-input { width:90px; color:#000; }
-.prov-row td { vertical-align:middle !important; }
-.prov-usage { font-size:12px; color:#888; }
-.prov-unavail { opacity:0.55; }
-</style>
-
 <script>
 (function () {
   'use strict';
+
+  // Propagate data-ai-theme onto <body> so [data-ai-theme] selectors in <style> match.
+  (function propagateTheme() {
+    var wrapper = document.querySelector('.ai-providers-page');
+    var theme = wrapper && wrapper.getAttribute('data-ai-theme');
+    if (theme) { document.body.setAttribute('data-ai-theme', theme); }
+  })();
+
   function csrf() { var m = document.querySelector('meta[name="csrf-token"]'); return m ? m.content : ''; }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
 
@@ -71,7 +124,7 @@
 
   function render(providers) {
     if (!providers.length) { tableEl.innerHTML = '<p class="text-muted">No providers configured.</p>'; return; }
-    var rows = providers.map(function (p, i) {
+    var rows = providers.map(function (p) {
       var avail = p.local
         ? '<span class="label label-info">local</span>'
         : (p.available ? '<span class="label label-success">key set</span>'

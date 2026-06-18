@@ -8,7 +8,8 @@
 {% block body %}
 {% include '_ai_nav.html' %}
 <div id="ai-curation-root"
-     data-api-base="{{ url_for('ai_bridge.proxy_api', subpath='') }}">
+     data-api-base="{{ url_for('ai_bridge.proxy_api', subpath='') }}"
+     data-ai-theme="{{ 'dark' if g.current_theme == 1 else 'light' }}">
   <noscript>
     <div class="alert alert-warning">
       AI Curation requires JavaScript to be enabled.

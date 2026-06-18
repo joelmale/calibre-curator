@@ -2,10 +2,15 @@
    Caller must set `page` variable to the current page key.
    The Discover / Mood / Sequences tabs are SPA routes on the dashboard page
    (hash-based); a small script below keeps their active state in sync with the
-   URL hash without a reload. #}
+   URL hash without a reload.
+
+   Theme: CWA exposes `g.current_theme` (int: 0=light, 1=caliBlur/dark).
+   We set data-ai-theme on the nav root here so CSS tokens resolve before paint.
+   The companion JS (src/app/theme.ts, compiled into ai-dashboard.js) also sets
+   data-ai-theme on #ai-curation-root and adds a live MutationObserver. #}
 <nav id="ai-nav-root" class="ai-nav" aria-label="AI Curator navigation"
      data-dashboard-url="{{ url_for('ai_bridge.dashboard') }}"
-     style="background:#fff;border-bottom:1px solid #e0e0e0;margin-bottom:20px;padding:0 4px">
+     data-ai-theme="{{ 'dark' if g.current_theme == 1 else 'light' }}">
   <ul class="nav nav-tabs" style="border-bottom:none">
 
     <li role="presentation" data-spa-tab="" class="{{ 'active' if page == 'ai-dashboard' }}">

@@ -1,9 +1,13 @@
 import { API_BASE } from "./environment";
+import { initTheme } from "./theme";
 import { HttpClient } from "../api/httpClient";
 import { AiApiClient } from "../api/aiClient";
 import { AiDashboardPage } from "../components/pages/AiDashboardPage";
 import { AiMoodPage } from "../components/pages/AiMoodPage";
 import { AiSequencePage } from "../components/pages/AiSequencePage";
+
+// Apply theme tokens before any rendering to avoid flash-of-wrong-theme.
+initTheme();
 
 const http = new HttpClient(API_BASE);
 const client = new AiApiClient(http);

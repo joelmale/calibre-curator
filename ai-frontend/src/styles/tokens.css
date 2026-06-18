@@ -1,12 +1,143 @@
-/* Design tokens — override to re-theme the AI dashboard */
-:root {
-  --ai-color-primary: #337ab7;     /* Bootstrap 3 primary */
-  --ai-color-surface: #ffffff;
-  --ai-color-border: #dddddd;
-  --ai-color-text: #333333;
-  --ai-color-text-muted: #777777;
-  --ai-radius: 4px;
-  --ai-spacing-sm: 8px;
-  --ai-spacing-md: 16px;
-  --ai-spacing-lg: 24px;
+/* =============================================================================
+   AI Curator — Design Tokens (theme-aware)
+   =============================================================================
+   Two palettes: light (default) and dark, switched by [data-ai-theme="dark"].
+
+   The [data-ai-theme] attribute is set on #ai-curation-root (and mirrored onto
+   #ai-nav-root) by src/app/theme.ts at page-load time.  Server templates also
+   set it via the Jinja g.current_theme signal so there is no flash-of-wrong-theme.
+
+   WCAG AA contrast targets (4.5:1 normal text, 3:1 large text):
+     Light: --ai-color-text #222 on --ai-color-surface #fff  → 16.1:1  ✓
+     Dark:  --ai-color-text #e8e8e8 on --ai-color-surface #1e2030 → 10.6:1 ✓
+   ============================================================================= */
+
+/* ── Light palette (default / fallback) ────────────────────────────────────── */
+:root,
+[data-ai-theme="light"] {
+  --ai-color-primary:       #337ab7;   /* Bootstrap 3 primary — same both themes */
+  --ai-color-primary-hover: #286090;
+  --ai-color-primary-text:  #ffffff;
+
+  --ai-color-bg:            #f5f5f5;   /* outer page background */
+  --ai-color-surface:       #ffffff;   /* card / panel background */
+  --ai-color-surface-alt:   #f9f9f9;   /* table stripe, input bg */
+
+  --ai-color-border:        #dddddd;
+  --ai-color-border-strong: #bbbbbb;
+
+  --ai-color-text:          #222222;   /* primary body text */
+  --ai-color-text-muted:    #6c757d;   /* secondary / helper text */
+  --ai-color-text-inverse:  #ffffff;
+
+  --ai-color-nav-bg:        #ffffff;
+  --ai-color-nav-border:    #e0e0e0;
+  --ai-color-nav-text:      #333333;
+  --ai-color-nav-hover-bg:  #f5f5f5;
+
+  --ai-color-input-bg:      #ffffff;
+  --ai-color-input-text:    #333333;
+  --ai-color-input-border:  #cccccc;
+
+  --ai-color-table-stripe:  #f9f9f9;
+  --ai-color-table-hover:   #f0f0f0;
+  --ai-color-table-border:  #ddd;
+
+  --ai-color-code-bg:       #f4f4f4;
+  --ai-color-code-text:     #c7254e;
+
+  /* Semantic status colours (same both themes — Bootstrap-derived) */
+  --ai-color-success:       #3c763d;
+  --ai-color-success-bg:    #dff0d8;
+  --ai-color-success-border:#d6e9c6;
+  --ai-color-warning:       #8a6d3b;
+  --ai-color-warning-bg:    #fcf8e3;
+  --ai-color-warning-border:#faebcc;
+  --ai-color-danger:        #a94442;
+  --ai-color-danger-bg:     #f2dede;
+  --ai-color-danger-border: #ebccd1;
+  --ai-color-info:          #31708f;
+  --ai-color-info-bg:       #d9edf7;
+  --ai-color-info-border:   #bce8f1;
+
+  --ai-color-tag-bg:        #eef;
+  --ai-color-tag-text:      #338;
+  --ai-color-tag-border:    #cce;
+  --ai-color-tag-new-bg:    #dff0d8;
+  --ai-color-tag-new-text:  #3c763d;
+  --ai-color-tag-new-border:#d6e9c6;
+
+  --ai-color-fmt-keep-bg:   #dff0d8;
+  --ai-color-fmt-keep-text: #3c763d;
+  --ai-color-fmt-keep-border:#d6e9c6;
+  --ai-color-fmt-rm-bg:     #f2dede;
+  --ai-color-fmt-rm-text:   #a94442;
+  --ai-color-fmt-rm-border: #ebccd1;
+
+  --ai-radius:         4px;
+  --ai-spacing-sm:     8px;
+  --ai-spacing-md:     16px;
+  --ai-spacing-lg:     24px;
+}
+
+/* ── Dark palette (caliBlur / g.current_theme == 1) ────────────────────────── */
+[data-ai-theme="dark"] {
+  --ai-color-primary:       #5b9bd5;   /* lightened for dark bg — 4.7:1 on surface */
+  --ai-color-primary-hover: #7ab3e0;
+  --ai-color-primary-text:  #0d1117;
+
+  --ai-color-bg:            #161820;
+  --ai-color-surface:       #1e2030;   /* card / panel bg */
+  --ai-color-surface-alt:   #252840;   /* table stripe, input bg */
+
+  --ai-color-border:        #3a3d5a;
+  --ai-color-border-strong: #555880;
+
+  --ai-color-text:          #e8e8e8;   /* 10.6:1 on surface ✓ */
+  --ai-color-text-muted:    #9ba3c0;   /* 4.6:1 on surface ✓ */
+  --ai-color-text-inverse:  #0d1117;
+
+  --ai-color-nav-bg:        #1a1c2e;
+  --ai-color-nav-border:    #3a3d5a;
+  --ai-color-nav-text:      #e8e8e8;
+  --ai-color-nav-hover-bg:  #252840;
+
+  --ai-color-input-bg:      #252840;
+  --ai-color-input-text:    #e8e8e8;
+  --ai-color-input-border:  #4a4d6a;
+
+  --ai-color-table-stripe:  #252840;
+  --ai-color-table-hover:   #2d3050;
+  --ai-color-table-border:  #3a3d5a;
+
+  --ai-color-code-bg:       #2a2d45;
+  --ai-color-code-text:     #ff8fa3;
+
+  /* Semantic status colours — darkened for readability on dark bg */
+  --ai-color-success:       #8fd19e;
+  --ai-color-success-bg:    #1a3020;
+  --ai-color-success-border:#2a5035;
+  --ai-color-warning:       #e8c97a;
+  --ai-color-warning-bg:    #2e2510;
+  --ai-color-warning-border:#4a3c18;
+  --ai-color-danger:        #f48a8a;
+  --ai-color-danger-bg:     #2e1010;
+  --ai-color-danger-border: #4a1f1f;
+  --ai-color-info:          #7ec8e3;
+  --ai-color-info-bg:       #112030;
+  --ai-color-info-border:   #1e3a50;
+
+  --ai-color-tag-bg:        #1e2240;
+  --ai-color-tag-text:      #99bbee;
+  --ai-color-tag-border:    #2e3860;
+  --ai-color-tag-new-bg:    #1a3020;
+  --ai-color-tag-new-text:  #8fd19e;
+  --ai-color-tag-new-border:#2a5035;
+
+  --ai-color-fmt-keep-bg:   #1a3020;
+  --ai-color-fmt-keep-text: #8fd19e;
+  --ai-color-fmt-keep-border:#2a5035;
+  --ai-color-fmt-rm-bg:     #2e1010;
+  --ai-color-fmt-rm-text:   #f48a8a;
+  --ai-color-fmt-rm-border: #4a1f1f;
 }

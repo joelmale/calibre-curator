@@ -2,11 +2,103 @@
 
 {% block header %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
+<style>
+/* AI Enrichment page — theme tokens injected at render time.
+   data-ai-theme is set on #ai-nav-root (the first AI element painted) so tokens
+   cascade into the page body wrapper below as well. */
+.ai-enrichment-page {
+  color: var(--ai-color-text, #222);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.tag-chip {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 11px;
+  background: var(--ai-color-tag-bg, #eef);
+  color: var(--ai-color-tag-text, #338);
+  border: 1px solid var(--ai-color-tag-border, #cce);
+  margin: 1px;
+}
+.tag-new {
+  background: var(--ai-color-tag-new-bg, #dff0d8);
+  color: var(--ai-color-tag-new-text, #3c763d);
+  border-color: var(--ai-color-tag-new-border, #d6e9c6);
+}
+.enrich-card { margin-bottom: 16px; }
+.enrich-card .panel-body label { font-weight: normal; }
+
+/* Panel overrides for dark theme */
+[data-ai-theme="dark"] .panel-default {
+  background-color: var(--ai-color-surface);
+  border-color: var(--ai-color-border);
+  color: var(--ai-color-text);
+}
+[data-ai-theme="dark"] .panel-default > .panel-heading {
+  background-color: var(--ai-color-surface-alt);
+  border-color: var(--ai-color-border);
+  color: var(--ai-color-text);
+}
+[data-ai-theme="dark"] .panel-default > .panel-body {
+  background-color: var(--ai-color-surface);
+}
+[data-ai-theme="dark"] .table {
+  color: var(--ai-color-text);
+}
+[data-ai-theme="dark"] .table > tbody > tr > td,
+[data-ai-theme="dark"] .table > thead > tr > th {
+  border-color: var(--ai-color-table-border);
+  color: var(--ai-color-text);
+}
+[data-ai-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: var(--ai-color-table-stripe);
+}
+[data-ai-theme="dark"] .text-muted {
+  color: var(--ai-color-text-muted) !important;
+}
+[data-ai-theme="dark"] .form-control {
+  background-color: var(--ai-color-input-bg);
+  color: var(--ai-color-input-text);
+  border-color: var(--ai-color-input-border);
+}
+[data-ai-theme="dark"] .alert-danger {
+  color: var(--ai-color-danger);
+  background-color: var(--ai-color-danger-bg);
+  border-color: var(--ai-color-danger-border);
+}
+[data-ai-theme="dark"] .alert-warning {
+  color: var(--ai-color-warning);
+  background-color: var(--ai-color-warning-bg);
+  border-color: var(--ai-color-warning-border);
+}
+[data-ai-theme="dark"] .alert-info {
+  color: var(--ai-color-info);
+  background-color: var(--ai-color-info-bg);
+  border-color: var(--ai-color-info-border);
+}
+[data-ai-theme="dark"] .nav-tabs > li > a {
+  color: var(--ai-color-nav-text);
+  background-color: transparent;
+  border-color: transparent;
+}
+[data-ai-theme="dark"] .nav-tabs > li.active > a,
+[data-ai-theme="dark"] .nav-tabs > li.active > a:hover {
+  color: var(--ai-color-text);
+  background-color: var(--ai-color-surface);
+  border-color: var(--ai-color-border);
+  border-bottom-color: var(--ai-color-surface);
+}
+#enrich-spinner-label {
+  color: var(--ai-color-text-muted);
+}
+</style>
 {% endblock %}
 
 {% block body %}
 {% include '_ai_nav.html' %}
-<div class="container-fluid">
+<div class="container-fluid ai-enrichment-page"
+     data-ai-theme="{{ 'dark' if g.current_theme == 1 else 'light' }}">
   <div class="row">
     <div class="col-sm-10 col-sm-offset-1">
 
@@ -38,7 +130,7 @@
         <p>
           <button id="batch-btn" class="btn btn-primary btn-sm">
             Generate next <input id="batch-count" type="number" value="20" min="1" max="100"
-              style="width:60px;color:#000" class="input-sm"> books
+              style="width:60px" class="input-sm"> books
           </button>
           <button id="queue-refresh" class="btn btn-default btn-sm">Refresh</button>
         </p>
@@ -59,7 +151,7 @@
 
       <div id="enrich-spinner" style="display:none;text-align:center;padding:24px">
         <span class="glyphicon glyphicon-refresh" style="font-size:2em;animation:spin 1s linear infinite"></span>
-        <p id="enrich-spinner-label" style="margin-top:8px;color:#888"></p>
+        <p id="enrich-spinner-label" style="margin-top:8px"></p>
       </div>
       <div id="enrich-error" class="alert alert-danger" style="display:none"></div>
 
@@ -67,18 +159,17 @@
   </div>
 </div>
 
-<style>
-@keyframes spin { to { transform: rotate(360deg); } }
-.tag-chip { display:inline-block;padding:2px 7px;border-radius:3px;font-size:11px;
-  background:#eef;color:#338;border:1px solid #cce;margin:1px; }
-.tag-new { background:#dff0d8;color:#3c763d;border-color:#d6e9c6; }
-.enrich-card { margin-bottom:16px; }
-.enrich-card .panel-body label { font-weight:normal; }
-</style>
-
 <script>
 (function () {
   'use strict';
+
+  // Propagate data-ai-theme from the page wrapper onto <body> so the
+  // [data-ai-theme="dark"] selectors in our <style> block match.
+  (function propagateTheme() {
+    var wrapper = document.querySelector('.ai-enrichment-page');
+    var theme = wrapper && wrapper.getAttribute('data-ai-theme');
+    if (theme) { document.body.setAttribute('data-ai-theme', theme); }
+  })();
 
   function csrf() {
     var m = document.querySelector('meta[name="csrf-token"]');

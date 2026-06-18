@@ -1,27 +1,202 @@
 @import "./tokens.css";
 
+/* =============================================================================
+   AI Curator — Component Styles
+   All colours come from tokens.css variables; no hardcoded palette values here.
+   ============================================================================= */
+
+/* ── Bootstrap overrides scoped to the AI root ─────────────────────────────── */
+#ai-curation-root,
+#ai-nav-root {
+  /* Provide a colour baseline so Bootstrap's own hardcoded colours don't bleed */
+  color: var(--ai-color-text);
+}
+
+/* Panel / card surfaces */
+#ai-curation-root .panel {
+  background-color: var(--ai-color-surface);
+  border-color: var(--ai-color-border);
+  color: var(--ai-color-text);
+}
+#ai-curation-root .panel-heading {
+  background-color: var(--ai-color-surface-alt);
+  border-color: var(--ai-color-border);
+  color: var(--ai-color-text);
+}
+#ai-curation-root .panel-body {
+  background-color: var(--ai-color-surface);
+}
+
+/* Tables */
+#ai-curation-root .table {
+  color: var(--ai-color-text);
+}
+#ai-curation-root .table > tbody > tr > td,
+#ai-curation-root .table > tbody > tr > th,
+#ai-curation-root .table > thead > tr > th {
+  border-color: var(--ai-color-table-border);
+  color: var(--ai-color-text);
+}
+#ai-curation-root .table-striped > tbody > tr:nth-of-type(odd) {
+  background-color: var(--ai-color-table-stripe);
+}
+#ai-curation-root .table-hover > tbody > tr:hover {
+  background-color: var(--ai-color-table-hover);
+}
+
+/* Alerts */
+#ai-curation-root .alert-success {
+  color: var(--ai-color-success);
+  background-color: var(--ai-color-success-bg);
+  border-color: var(--ai-color-success-border);
+}
+#ai-curation-root .alert-warning {
+  color: var(--ai-color-warning);
+  background-color: var(--ai-color-warning-bg);
+  border-color: var(--ai-color-warning-border);
+}
+#ai-curation-root .alert-danger {
+  color: var(--ai-color-danger);
+  background-color: var(--ai-color-danger-bg);
+  border-color: var(--ai-color-danger-border);
+}
+#ai-curation-root .alert-info {
+  color: var(--ai-color-info);
+  background-color: var(--ai-color-info-bg);
+  border-color: var(--ai-color-info-border);
+}
+
+/* Inputs */
+#ai-curation-root .form-control {
+  background-color: var(--ai-color-input-bg);
+  color: var(--ai-color-input-text);
+  border-color: var(--ai-color-input-border);
+}
+#ai-curation-root .form-control:focus {
+  border-color: var(--ai-color-primary);
+  box-shadow: 0 0 0 2px rgba(91, 155, 213, 0.25);
+}
+
+/* text-muted inside root */
+#ai-curation-root .text-muted {
+  color: var(--ai-color-text-muted) !important;
+}
+
+/* ── Nav bar ────────────────────────────────────────────────────────────────── */
+#ai-nav-root.ai-nav {
+  background: var(--ai-color-nav-bg);
+  border-bottom: 1px solid var(--ai-color-nav-border);
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+
+#ai-nav-root .nav-tabs > li > a {
+  color: var(--ai-color-nav-text);
+  background-color: transparent;
+  border-color: transparent;
+}
+#ai-nav-root .nav-tabs > li > a:hover,
+#ai-nav-root .nav-tabs > li > a:focus {
+  color: var(--ai-color-text);
+  background-color: var(--ai-color-nav-hover-bg);
+  border-color: var(--ai-color-border);
+}
+#ai-nav-root .nav-tabs > li.active > a,
+#ai-nav-root .nav-tabs > li.active > a:hover,
+#ai-nav-root .nav-tabs > li.active > a:focus {
+  color: var(--ai-color-text);
+  background-color: var(--ai-color-surface);
+  border-color: var(--ai-color-border);
+  border-bottom-color: var(--ai-color-surface);
+}
+
+/* Dropdown menu in the nav */
+#ai-nav-root .dropdown-menu {
+  background-color: var(--ai-color-surface);
+  border-color: var(--ai-color-border);
+}
+#ai-nav-root .dropdown-menu > li > a {
+  color: var(--ai-color-nav-text);
+}
+#ai-nav-root .dropdown-menu > li > a:hover,
+#ai-nav-root .dropdown-menu > li.active > a {
+  background-color: var(--ai-color-nav-hover-bg);
+  color: var(--ai-color-text);
+}
+#ai-nav-root .dropdown-menu .text-muted {
+  color: var(--ai-color-text-muted) !important;
+}
+
+/* ── Dashboard heading ──────────────────────────────────────────────────────── */
 .ai-dashboard__heading {
   margin-bottom: var(--ai-spacing-lg);
   color: var(--ai-color-text);
 }
 
+/* ── Spinner ────────────────────────────────────────────────────────────────── */
 .ai-spinner {
   padding: var(--ai-spacing-lg) 0;
   color: var(--ai-color-text-muted);
   text-align: center;
 }
-
 .ai-spinner__icon {
   animation: ai-spin 1s linear infinite;
   margin-right: var(--ai-spacing-sm);
 }
-
 @keyframes ai-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
 
-/* Book card — used from Phase 5 */
+/* ── Status table (Library Index + Embedding & Ingestion panels) ────────────── */
+.ai-status-table {
+  width: 100%;
+}
+.ai-status-table > tbody > tr > td {
+  padding: 4px 6px;
+  vertical-align: middle;
+  border-top: 1px solid var(--ai-color-border);
+  color: var(--ai-color-text);
+}
+.ai-status-table > tbody > tr:first-child > td {
+  border-top: none;
+}
+/* Label badges inside status tables (readable both themes) */
+.ai-status-table .label-success {
+  color: var(--ai-color-success-bg);
+  background-color: var(--ai-color-success);
+}
+.ai-status-table .label-danger {
+  color: var(--ai-color-danger-bg);
+  background-color: var(--ai-color-danger);
+}
+
+/* ── Progress bar ───────────────────────────────────────────────────────────── */
+.ai-progress-bar {
+  margin-top: 4px;
+  height: 8px;
+  background-color: var(--ai-color-border);
+}
+.ai-progress-bar .progress-bar {
+  background-color: var(--ai-color-primary);
+}
+
+/* ── Code elements ──────────────────────────────────────────────────────────── */
+#ai-curation-root code {
+  background-color: var(--ai-color-code-bg);
+  color: var(--ai-color-code-text);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* ── Ingestion controls ─────────────────────────────────────────────────────── */
+.ai-ingestion-controls .form-control {
+  background-color: var(--ai-color-input-bg);
+  color: var(--ai-color-input-text);
+  border-color: var(--ai-color-input-border);
+}
+
+/* ── Book card ──────────────────────────────────────────────────────────────── */
 .ai-book-card {
   display: flex;
   flex-direction: column;
@@ -29,21 +204,20 @@
   border-radius: var(--ai-radius);
   overflow: hidden;
   height: 100%;
+  background-color: var(--ai-color-surface);
+  color: var(--ai-color-text);
 }
-
 .ai-book-card__cover-link {
   display: block;
   aspect-ratio: 2 / 3;
   overflow: hidden;
   background: var(--ai-color-border);
 }
-
 .ai-book-card__cover {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-
 .ai-book-card__cover-placeholder {
   width: 100%;
   height: 100%;
@@ -53,23 +227,20 @@
   color: var(--ai-color-text-muted);
   font-size: 12px;
 }
-
 .ai-book-card__body {
   padding: var(--ai-spacing-sm);
   flex: 1;
 }
-
 .ai-book-card__title {
   font-size: 14px;
   margin: 0 0 4px;
+  color: var(--ai-color-text);
 }
-
 .ai-book-card__authors {
   font-size: 12px;
   color: var(--ai-color-text-muted);
   margin: 0 0 var(--ai-spacing-sm);
 }
-
 .ai-match-reasons {
   list-style: none;
   padding: 0;
@@ -77,18 +248,27 @@
   font-size: 12px;
   color: var(--ai-color-text-muted);
 }
-
 .ai-match-reasons li::before {
   content: "· ";
 }
 
-/* Recommendation shelf */
+/* ── Recommendation shelf ───────────────────────────────────────────────────── */
 .ai-recommendation-shelf__header {
   margin-bottom: var(--ai-spacing-md);
+  color: var(--ai-color-text);
 }
-
 .ai-recommendation-shelf__items {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--ai-spacing-md);
+}
+
+/* ── Search bar / badge ─────────────────────────────────────────────────────── */
+.ai-search-bar .input-group-btn .btn-primary {
+  background-color: var(--ai-color-primary);
+  border-color: var(--ai-color-primary-hover);
+  color: var(--ai-color-primary-text);
+}
+.ai-badge {
+  font-size: 11px;
 }
