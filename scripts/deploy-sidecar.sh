@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Rebuild and restart ONLY the ai-sidecar service.
 #
-# calibre-web is slow to rebuild (linuxserver base + the universal-calibre
-# DOCKER_MODS) and rarely changes, so skip it while iterating on the sidecar.
+# calibre-web is slow to rebuild (CWA base image is large) and rarely changes,
+# so skip it while iterating on the sidecar.
 # The sidecar is a plain python:3.12-slim image and needs no frontend build.
 #
 # Run this on the Docker host where the stack lives (the same place

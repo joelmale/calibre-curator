@@ -4,7 +4,7 @@
 > Goal: encode every failure as a fast, precise test so the same class of bug cannot
 > reach a running container again.
 
-Scope audited: `calibre-web-fork/` (Dockerfile, `patch_main.py`, `patch_layout.py`,
+Scope audited: `cwa-fork/` (Dockerfile, `patch_main.py`, `patch_layout.py`,
 `cps/ai_bridge.py`), `ai-sidecar/sidecar/**`, `ai-frontend/src/{api,types}/**`,
 `compose.yaml`.
 
@@ -83,7 +83,7 @@ the two lines are present at the right indentation.
 import ast, subprocess, sys, textwrap
 from pathlib import Path
 
-PATCHER = Path("calibre-web-fork/patch_main.py")
+PATCHER = Path("cwa-fork/patch_main.py")
 
 def _run(tmp: Path, src: str) -> str:
     f = tmp / "main.py"
@@ -181,7 +181,7 @@ check: parse `ai_bridge.py` and confirm the import target.
 # tests/build/test_ai_bridge_imports.py
 import ast, pathlib
 def test_is_admin_uses_cw_login():
-    src = pathlib.Path("calibre-web-fork/cps/ai_bridge.py").read_text()
+    src = pathlib.Path("cwa-fork/cps/ai_bridge.py").read_text()
     tree = ast.parse(src)
     imports = [n.module for n in ast.walk(tree)
                if isinstance(n, ast.ImportFrom) and "current_user"
@@ -190,20 +190,25 @@ def test_is_admin_uses_cw_login():
     assert "flask_login" not in imports     # never regress to the uninstalled package (#3)
 ```
 
-**B3 — pip targets the lsiopy interpreter (Dockerfile lint)**
-*What:* in `calibre-web-fork/Dockerfile`, any `pip install` must use `/lsiopy/bin/pip`
-(or `/lsiopy/bin/python -m pip`), never bare `pip`. Directly encodes #4.
+**B3 — No pip install in CWA Dockerfile (Dockerfile lint)**
+*What:* the CWA migration removed the `pip install requests` line because CWA's bundled
+cps already provides `requests`. Ensure the Dockerfile never reintroduces a bare or
+lsiopy-targeted `pip install` — `/lsiopy` does not exist in the CWA image. Directly
+encodes the CWA migration change (was #4 for the old linuxserver base).
 *How:* a tiny lint test that greps the Dockerfile.
 *Tool:* pytest (or a hadolint custom rule).
 
 ```python
 # tests/build/test_dockerfile_pip_target.py
 import re, pathlib
-def test_calibreweb_pip_uses_lsiopy():
-    df = pathlib.Path("calibre-web-fork/Dockerfile").read_text()
+def test_calibreweb_dockerfile_has_no_pip_install():
+    df = pathlib.Path("cwa-fork/Dockerfile").read_text()
     for line in df.splitlines():
-        if re.search(r'\bpip\s+install', line):
-            assert "/lsiopy/bin/pip" in line, f"pip not targeting lsiopy venv: {line!r}"
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        assert not re.search(r'\bpip\s+install', stripped), \
+            f"Unexpected pip install in CWA Dockerfile (requests is bundled): {line!r}"
 ```
 
 **B4 — First-boot DB integrity smoke (addresses #10)**
@@ -437,10 +442,10 @@ indentation, and a second run reports "Already patched" and changes nothing.
 *When* its imports are statically analyzed
 *Then* `current_user` is imported from `cw_login`, and `flask_login` is never imported.
 
-**RT-04 — calibre-web Dockerfile installs into the lsiopy venv (#4)**
-*Given* `calibre-web-fork/Dockerfile`
-*When* scanned for `pip install`
-*Then* every such line uses `/lsiopy/bin/pip`.
+**RT-04 — CWA Dockerfile contains no pip install (#4 / CWA migration)**
+*Given* `cwa-fork/Dockerfile`
+*When* scanned for `pip install` (excluding comment lines)
+*Then* no such line exists — requests is bundled by CWA and /lsiopy does not exist in this image.
 
 **RT-05 — POST carries CSRF and proxy returns JSON 202 (#5)**
 *Given* a logged-in session and a `csrf-token` meta tag

@@ -7,11 +7,12 @@ networks:
 volumes:
   calibre_web_config:
   ai_sidecar_state:
+  cwa_book_ingest:
 
 services:
   calibre-web:
     build:
-      context: ./calibre-web-fork
+      context: ./cwa-fork
       dockerfile: Dockerfile
     container_name: calibre-web
     restart: unless-stopped
@@ -19,13 +20,17 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=America/New_York
-      - DOCKER_MODS=linuxserver/mods:universal-calibre
+      # DOCKER_MODS=linuxserver/mods:universal-calibre removed — CWA bundles Calibre at /app/calibre
       - AI_SIDECAR_ENABLED=true
       - AI_SIDECAR_BASE_URL=http://calibre-ai-sidecar:8090
       - AI_SIDECAR_SHARED_TOKEN=${AI_SIDECAR_SHARED_TOKEN}
+      # /mnt/books-nas-vol3 is an NFS/SMB share — NETWORK_SHARE_MODE disables SQLite
+      # WAL mode to prevent metadata.db corruption over the network filesystem.
+      - NETWORK_SHARE_MODE=true
     volumes:
       - calibre_web_config:/config
-      - /mnt/books-nas-vol3/calibre:/books
+      - /mnt/books-nas-vol3/calibre:/calibre-library
+      - cwa_book_ingest:/cwa-book-ingest
     ports:
       - "8083:8083"
     networks:

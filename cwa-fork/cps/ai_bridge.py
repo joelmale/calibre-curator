@@ -32,9 +32,9 @@ ALLOWED_METHODS  = {"GET", "POST"}
 
 # ── Calibre library config ────────────────────────────────────────────────────
 
-_CALIBRE_LIB  = os.getenv("CALIBRE_LIBRARY_ROOT", "/books")
+_CALIBRE_LIB  = os.getenv("CALIBRE_LIBRARY_ROOT", "/calibre-library")
 _CALIBRE_DB   = os.path.join(_CALIBRE_LIB, "metadata.db")
-_CALIBREDB    = shutil.which("calibredb") or "/usr/bin/calibredb"
+_CALIBREDB    = shutil.which("calibredb") or "/app/calibre/calibredb"
 _MAX_EXECUTE  = 500       # hard cap on a single execute run
 _SCRUB_LOCK   = threading.Lock()
 
@@ -288,20 +288,6 @@ def scrub_execute():
         _SCRUB_LOCK.release()
 
     return jsonify(result)
-
-
-# ── Duplicate detector (Feature 2) ─────────────────────────────────────────────
-
-@ai_bridge.route("/duplicates", methods=["GET"])
-@user_login_required
-def duplicates_index():
-    if not _is_admin():
-        abort(403)
-    return render_title_template(
-        "ai_duplicates.html",
-        title="Duplicate Detector",
-        page="ai-duplicates",
-    )
 
 
 # ── Chat provider rate limits ──────────────────────────────────────────────────

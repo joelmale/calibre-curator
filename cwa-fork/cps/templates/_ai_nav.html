@@ -30,7 +30,7 @@
     </li>
 
     {% if current_user.role_admin() %}
-    <li role="presentation" class="dropdown {{ 'active' if page in ['ai-scrub', 'ai-duplicates', 'ai-enrichment', 'ai-providers'] }}">
+    <li role="presentation" class="dropdown {{ 'active' if page in ['ai-scrub', 'ai-enrichment', 'ai-providers'] }}">
       <a class="dropdown-toggle" data-toggle="dropdown" role="button"
          aria-haspopup="true" aria-expanded="false">
         <span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
@@ -42,14 +42,6 @@
             Format Scrub
             <small class="text-muted" style="display:block;margin-top:1px">
               Remove non-canonical formats in bulk
-            </small>
-          </a>
-        </li>
-        <li class="{{ 'active' if page == 'ai-duplicates' }}">
-          <a href="{{ url_for('ai_bridge.duplicates_index') }}">
-            Duplicate Detector
-            <small class="text-muted" style="display:block;margin-top:1px">
-              Exact &amp; near-duplicate books
             </small>
           </a>
         </li>
