@@ -1,5 +1,5 @@
 import type { ICuratedCollection, ICuratedCollectionSummary } from "./collection";
-import type { IAiStatusResponse } from "./status";
+import type { IAiStatusResponse, IIngestionProgress } from "./status";
 
 // Matches the actual JSON shape returned by the sidecar search + recommendations APIs
 export interface IApiBookResult {
@@ -128,6 +128,7 @@ export interface IIngestionFailuresResponse {
 export interface IAiApiClient {
   getStatus(): Promise<ApiResult<IAiStatusResponse>>;
   getRecentFailures(): Promise<ApiResult<IIngestionFailuresResponse>>;
+  getIngestionProgress(): Promise<ApiResult<IIngestionProgress>>;
   triggerIngestion(limit?: number | null): Promise<ApiResult<IIngestionTriggerResponse>>;
   searchSemantic(request: ISemanticSearchRequest): Promise<ApiResult<ISemanticSearchResponse>>;
   listCollections(): Promise<ApiResult<ICollectionsResponse>>;

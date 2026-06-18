@@ -17,7 +17,7 @@ import type {
   ApiResult,
 } from "../types/api";
 import type { ICuratedCollection } from "../types/collection";
-import type { IAiStatusResponse } from "../types/status";
+import type { IAiStatusResponse, IIngestionProgress } from "../types/status";
 
 export class AiApiClient implements IAiApiClient {
   public constructor(private readonly http: HttpClient) {}
@@ -28,6 +28,10 @@ export class AiApiClient implements IAiApiClient {
 
   public getRecentFailures(): Promise<ApiResult<IIngestionFailuresResponse>> {
     return this.http.get<IIngestionFailuresResponse>("/status/failures");
+  }
+
+  public getIngestionProgress(): Promise<ApiResult<IIngestionProgress>> {
+    return this.http.get<IIngestionProgress>("/ingestion/progress");
   }
 
   public triggerIngestion(limit?: number | null): Promise<ApiResult<IIngestionTriggerResponse>> {

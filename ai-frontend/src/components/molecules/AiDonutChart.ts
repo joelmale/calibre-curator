@@ -109,15 +109,31 @@ export function createAiDonutChart(slices: DonutSlice[]): HTMLElement {
     circle.setAttribute("stroke-width", String(R - HOLE));
     svg.appendChild(circle);
   } else {
-    let startAngle = 0;
-    slices.forEach((slice, i) => {
-      if (slice.count === 0) return;
-      const sweep = (slice.count / total) * 360;
-      const endAngle = startAngle + sweep;
-      const path = arcPath(CX, CY, R, startAngle, endAngle, colorFor(slice.label, i), HOLE);
-      svg.appendChild(path);
-      startAngle = endAngle;
-    });
+    // Check if a single slice is ~100% (would cause degenerate arc where start==end)
+    const nonZeroSlices = slices.filter(s => s.count > 0);
+    if (nonZeroSlices.length === 1) {
+      // Render a full circle ring for the sole slice instead of a degenerate arc
+      const sole = nonZeroSlices[0]!;
+      const ring = document.createElementNS(svgNS, "circle");
+      ring.setAttribute("cx", String(CX));
+      ring.setAttribute("cy", String(CY));
+      ring.setAttribute("r", String((R + HOLE) / 2));
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", colorFor(sole.label, slices.indexOf(sole)));
+      ring.setAttribute("stroke-width", String(R - HOLE));
+      svg.appendChild(ring);
+    } else {
+      let startAngle = 0;
+      slices.forEach((slice, i) => {
+        if (slice.count === 0) return;
+        // Cap sweep at 359.99° to avoid degenerate arcs when one slice dominates
+        const sweep = Math.min((slice.count / total) * 360, 359.99);
+        const endAngle = startAngle + sweep;
+        const path = arcPath(CX, CY, R, startAngle, endAngle, colorFor(slice.label, i), HOLE);
+        svg.appendChild(path);
+        startAngle = endAngle;
+      });
+    }
   }
 
   // Center label: percentage indexed

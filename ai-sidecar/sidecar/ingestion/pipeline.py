@@ -30,6 +30,44 @@ _running = threading.Event()
 
 _EMBED_BATCH = 32
 
+# ---------------------------------------------------------------------------
+# In-memory progress tracking (thread-safe, no DB writes)
+# ---------------------------------------------------------------------------
+_progress_lock = threading.Lock()
+_progress: dict = {
+    "phase": "idle",
+    "total_to_process": 0,
+    "current_index": 0,
+    "current_book_id": None,
+    "current_title": None,
+    "chunks_embedded_so_far": 0,
+    "chunks_total": 0,
+}
+
+
+def get_progress() -> dict:
+    """Return a shallow copy of the current progress dict (safe to return as JSON)."""
+    with _progress_lock:
+        return dict(_progress)
+
+
+def _set_progress(**kwargs) -> None:  # noqa: ANN003
+    with _progress_lock:
+        _progress.update(kwargs)
+
+
+def _reset_progress() -> None:
+    with _progress_lock:
+        _progress.update({
+            "phase": "idle",
+            "total_to_process": 0,
+            "current_index": 0,
+            "current_book_id": None,
+            "current_title": None,
+            "chunks_embedded_so_far": 0,
+            "chunks_total": 0,
+        })
+
 
 def is_running() -> bool:
     return _running.is_set()
@@ -52,6 +90,7 @@ def run_pipeline_once(run_id: int | None = None, limit: int | None = None) -> No
         _do_run(run_id, limit=limit)
     finally:
         _running.clear()
+        _reset_progress()
 
 
 def _do_run(run_id: int | None, limit: int | None = None) -> None:
@@ -78,6 +117,7 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
             run_id = IngestionRunRepository.start(conn)
 
         try:
+            _set_progress(phase="scanning")
             logger.info("Run #%d — scanning Calibre library at %s", run_id, config.calibre_metadata_db)
             all_records = list(reader.list_books())
             scanned = len(all_records)
@@ -116,10 +156,24 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
                 logger.info("Run #%d — removed %d stale book(s) from index", run_id, removed_count)
 
             total_to_process = len(changed_records)
+            _set_progress(
+                phase="extracting",
+                total_to_process=total_to_process,
+                current_index=0,
+                current_book_id=None,
+                current_title=None,
+            )
+
             for idx, record in enumerate(changed_records, 1):
                 logger.info(
                     "Run #%d — [%d/%d] processing book %d: %s",
                     run_id, idx, total_to_process, record.book_id, record.title,
+                )
+                _set_progress(
+                    phase="extracting",
+                    current_index=idx,
+                    current_book_id=record.book_id,
+                    current_title=record.title,
                 )
                 try:
                     _process_book(conn, record, config, provider, store)
@@ -133,6 +187,7 @@ def _do_run(run_id: int | None, limit: int | None = None) -> None:
                     errors += 1
 
             logger.info("Run #%d — embedding pending chunks…", run_id)
+            _set_progress(phase="embedding", current_index=total_to_process, current_book_id=None, current_title=None)
             embedded = _embed_pending(conn, provider, store)
 
             status = "completed" if errors == 0 else "partial"
@@ -213,6 +268,12 @@ def _process_book(conn, record, config, provider, store) -> None:
 
 def _embed_pending(conn, provider, store) -> int:
     """Embed all chunks that have no vector_id yet. Returns count embedded."""
+    # Approximate total unembedded chunks for progress tracking
+    total_unembedded = conn.execute(
+        "SELECT COUNT(*) FROM book_chunks WHERE vector_id IS NULL"
+    ).fetchone()[0]
+    _set_progress(chunks_total=total_unembedded, chunks_embedded_so_far=0)
+
     total = 0
     while True:
         rows = ChunkRepository.get_unembedded(conn, limit=_EMBED_BATCH)
@@ -240,7 +301,9 @@ def _embed_pending(conn, provider, store) -> int:
             documents=texts,
         )
         ChunkRepository.mark_embedded_batch(conn, uids, provider.model_name)
-        logger.info("Embedded batch of %d chunks (total so far: %d)", len(uids), total + len(uids))
+        total += len(uids)
+        _set_progress(chunks_embedded_so_far=total)
+        logger.info("Embedded batch of %d chunks (total so far: %d)", len(uids), total)
 
         # Mark books as fully indexed once all their chunks are embedded
         for book_id in set(book_ids):
@@ -251,7 +314,6 @@ def _embed_pending(conn, provider, store) -> int:
             if remaining == 0:
                 BookAiRepository.mark_status(conn, book_id, "indexed")
 
-        total += len(uids)
         if len(rows) < _EMBED_BATCH:
             break
 

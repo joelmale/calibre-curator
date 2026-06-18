@@ -1,5 +1,17 @@
 import type { ISODateTimeString } from "./book";
 
+export type PipelinePhase = "idle" | "scanning" | "extracting" | "embedding";
+
+export interface IIngestionProgress {
+  readonly phase: PipelinePhase;
+  readonly total_to_process: number;
+  readonly current_index: number;
+  readonly current_book_id: number | null;
+  readonly current_title: string | null;
+  readonly chunks_embedded_so_far: number;
+  readonly chunks_total: number;
+}
+
 export type IngestionStatus =
   | "idle"
   | "queued"
