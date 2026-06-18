@@ -56,11 +56,19 @@ export function createAiStatusPanel(s: IAiStatusResponse): HTMLElement {
   statusBadge.className = `label ${s.embedding.ok ? "label-success" : "label-danger"}`;
   statusBadge.textContent = s.embedding.ok ? "Ready" : "Not available";
 
-  const embeddingRows: ReadonlyArray<readonly [string, HTMLElement | string]> = [
+  const embeddingRows: Array<readonly [string, HTMLElement | string]> = [
     ["Provider", providerCode],
     ["Model", modelCode],
     ["Status", statusBadge],
   ];
+
+  // Chat / generation fallback chain (Enrichment, Mood, Sequences)
+  if (s.chat && s.chat.chain.length > 0) {
+    const chainEl = document.createElement("span");
+    chainEl.style.fontSize = "12px";
+    chainEl.textContent = s.chat.chain.join("  →  ");
+    embeddingRows.push(["Chat fallback", chainEl]);
+  }
 
   const embeddingTable = createAiStatusTable(embeddingRows);
   const runEl: HTMLElement = s.lastIngestionRun

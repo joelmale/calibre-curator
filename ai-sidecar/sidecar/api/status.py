@@ -69,6 +69,17 @@ def get_status():
             embedding_ok = False
             embedding_warning = f"Cannot reach Ollama: {exc}"
 
+    # Chat fallback chain — which generation providers are wired (no network call;
+    # provider clients are constructed lazily).
+    from ..ai import get_chat_client  # noqa: PLC0415
+    from ..ai.providers import FallbackChatClient  # noqa: PLC0415
+
+    chat_client = get_chat_client(config)
+    if isinstance(chat_client, FallbackChatClient):
+        chat_chain = [c.model_name for c in chat_client._clients]  # noqa: SLF001
+    else:
+        chat_chain = [chat_client.model_name]
+
     return jsonify({
         "library": {
             "metadataDbReadable": db_readable,
@@ -82,6 +93,10 @@ def get_status():
             "model":    embedding_model,
             "ok":       embedding_ok,
             "warning":  embedding_warning,
+        },
+        "chat": {
+            "priority": config.chat_provider_priority,
+            "chain":    chat_chain,
         },
         "lastIngestionRun": last_run,
     })

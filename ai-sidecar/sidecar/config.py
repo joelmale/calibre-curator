@@ -46,6 +46,43 @@ class Config:
         default_factory=lambda: os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
     )
 
+    # ── Chat / generation providers (Features 1, 3, 4) ───────────────────────
+    # Comma-separated priority; first provider with credentials wins, and local
+    # Ollama is always appended as the final fallback.
+    chat_provider_priority: list[str] = field(
+        default_factory=lambda: [
+            p.strip()
+            for p in os.getenv(
+                "CHAT_PROVIDER_PRIORITY", "gemini,anthropic,openai,meta,ollama"
+            ).split(",")
+            if p.strip()
+        ]
+    )
+    anthropic_api_key: str | None = field(
+        default_factory=lambda: os.getenv("ANTHROPIC_API_KEY") or None
+    )
+    anthropic_chat_model: str = field(
+        default_factory=lambda: os.getenv("ANTHROPIC_CHAT_MODEL", "claude-haiku-4-5")
+    )
+    openai_chat_model: str = field(
+        default_factory=lambda: os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+    )
+    gemini_api_key: str | None = field(
+        default_factory=lambda: os.getenv("GEMINI_API_KEY") or None
+    )
+    gemini_chat_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_CHAT_MODEL", "gemini-2.0-flash")
+    )
+    meta_api_key: str | None = field(
+        default_factory=lambda: os.getenv("META_API_KEY") or None
+    )
+    meta_base_url: str = field(
+        default_factory=lambda: os.getenv("META_BASE_URL", "https://api.llama.com/compat/v1")
+    )
+    meta_chat_model: str = field(
+        default_factory=lambda: os.getenv("META_CHAT_MODEL", "Llama-4-Maverick-17B-128E-Instruct-FP8")
+    )
+
     shared_token: str = field(
         default_factory=lambda: os.getenv("AI_SIDECAR_SHARED_TOKEN", "")
     )

@@ -34,8 +34,14 @@ export interface IIngestionRunStatus {
   readonly errorCount: number;
 }
 
+export interface IChatStatus {
+  readonly priority: readonly string[];
+  readonly chain: readonly string[];
+}
+
 export interface IAiStatusResponse {
   readonly library: ILibraryIndexStatus;
   readonly embedding: IEmbeddingStatus;
+  readonly chat?: IChatStatus;
   readonly lastIngestionRun: IIngestionRunStatus | null;
 }
