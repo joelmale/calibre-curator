@@ -1,53 +1,105 @@
 #!/usr/bin/env python3
 """Idempotent two-line patch for Calibre-Web's cps/main.py.
 
-Adds the ai_bridge Blueprint import and registration alongside the existing
-web blueprint, preserving whatever indentation the anchor lines use so the
-patch works regardless of whether the imports are at module level or inside
-a block (the linuxserver image has changed this between versions).
+Uses Python's AST to locate the exact line numbers of 'from .web import web'
+and 'app.register_blueprint(web)', then inserts the ai_bridge equivalents
+with matching indentation.  This is immune to indentation depth, inline
+comments, surrounding try/except blocks, and other textual variations.
 """
+import ast
 import sys
 
-IMPORT_ANCHOR = "from .web import web"
-REGISTER_ANCHOR = "app.register_blueprint(web)"
-IMPORT_LINE = "from .ai_bridge import ai_bridge"
-REGISTER_LINE = "app.register_blueprint(ai_bridge)"
-
-
-def insert_after(src: str, anchor: str, new_line: str) -> str:
-    """Insert new_line after the line whose stripped content matches anchor.
-
-    The inserted line inherits the leading whitespace of the anchor line so it
-    stays valid regardless of indentation depth.
-    """
-    lines = src.splitlines(keepends=True)
-    result = []
-    inserted = False
-    for line in lines:
-        result.append(line)
-        if not inserted and line.strip() == anchor.strip():
-            indent = line[: len(line) - len(line.lstrip())]
-            eol = "\r\n" if line.endswith("\r\n") else "\n"
-            result.append(indent + new_line.strip() + eol)
-            inserted = True
-    if not inserted:
-        sys.exit(f"ERROR: anchor '{anchor}' not found in {path}. "
-                 "Upstream main.py may have changed — update the anchor.")
-    return "".join(result)
-
+AI_IMPORT = "from .ai_bridge import ai_bridge"
+AI_REGISTER = "app.register_blueprint(ai_bridge)"
 
 path = sys.argv[1]
 with open(path) as f:
     src = f.read()
 
-if IMPORT_LINE in src:
+if AI_IMPORT in src:
     print(f"Already patched: {path}")
     sys.exit(0)
 
-src = insert_after(src, IMPORT_ANCHOR, IMPORT_LINE)
-src = insert_after(src, REGISTER_ANCHOR, REGISTER_LINE)
+try:
+    tree = ast.parse(src)
+except SyntaxError as exc:
+    sys.exit(f"ERROR: {path} has a syntax error before patching: {exc}")
+
+# ── locate web import ────────────────────────────────────────────────────────
+# Matches: from .web import web  (level=1, module="web", name="web")
+import_linenos: list[int] = []
+for node in ast.walk(tree):
+    if (
+        isinstance(node, ast.ImportFrom)
+        and node.level == 1
+        and node.module == "web"
+        and any(a.name == "web" for a in node.names)
+    ):
+        import_linenos.append(node.lineno)
+
+# ── locate register_blueprint(web) call ─────────────────────────────────────
+register_linenos: list[int] = []
+for node in ast.walk(tree):
+    if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)):
+        continue
+    call = node.value
+    if (
+        isinstance(call.func, ast.Attribute)
+        and call.func.attr == "register_blueprint"
+        and len(call.args) == 1
+        and isinstance(call.args[0], ast.Name)
+        and call.args[0].id == "web"
+    ):
+        register_linenos.append(node.lineno)
+
+if not import_linenos:
+    sys.exit(
+        f"ERROR: 'from .web import web' not found in {path}.\n"
+        "Upstream main.py may have changed — inspect the file and update this patcher."
+    )
+if not register_linenos:
+    sys.exit(
+        f"ERROR: 'app.register_blueprint(web)' not found in {path}.\n"
+        "Upstream main.py may have changed — inspect the file and update this patcher."
+    )
+
+import_lineno = sorted(import_linenos)[0]
+register_lineno = sorted(register_linenos)[0]
+
+print(f"Found web import  at line {import_lineno}")
+print(f"Found web register at line {register_lineno}")
+
+# ── build patched source ─────────────────────────────────────────────────────
+lines = src.splitlines(keepends=True)
+
+
+def _indent(lineno: int) -> str:
+    line = lines[lineno - 1]
+    return line[: len(line) - len(line.lstrip())]
+
+
+def _eol(lineno: int) -> str:
+    return "\r\n" if lines[lineno - 1].endswith("\r\n") else "\n"
+
+
+result = list(lines)
+
+# Insert register line first (higher index) so it doesn't shift import index.
+result.insert(register_lineno, _indent(register_lineno) + AI_REGISTER + _eol(register_lineno))
+result.insert(import_lineno,   _indent(import_lineno)   + AI_IMPORT   + _eol(import_lineno))
+
+patched = "".join(result)
+
+# ── self-verify before writing ───────────────────────────────────────────────
+try:
+    ast.parse(patched)
+except SyntaxError as exc:
+    sys.exit(
+        f"ERROR: patched {path} has a syntax error — this is a bug in the patcher.\n"
+        f"Details: {exc}"
+    )
 
 with open(path, "w") as f:
-    f.write(src)
+    f.write(patched)
 
 print(f"Patched {path} successfully.")
