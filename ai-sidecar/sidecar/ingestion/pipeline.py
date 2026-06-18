@@ -29,9 +29,10 @@ def is_running() -> bool:
     return _running.is_set()
 
 
-def run_pipeline_once(run_id: int | None = None) -> None:
+def run_pipeline_once(run_id: int | None = None, limit: int | None = None) -> None:
     """Scan Calibre, extract text, chunk, embed, and index into the vector store.
 
+    limit — cap how many changed books are processed in this run (None = all).
     Safe to call from APScheduler and the API endpoint concurrently — extra
     calls are no-ops while a run is in progress.
     """
@@ -42,12 +43,12 @@ def run_pipeline_once(run_id: int | None = None) -> None:
         return
 
     try:
-        _do_run(run_id)
+        _do_run(run_id, limit=limit)
     finally:
         _running.clear()
 
 
-def _do_run(run_id: int | None) -> None:
+def _do_run(run_id: int | None, limit: int | None = None) -> None:
     config = get_config()
 
     if not config.calibre_metadata_db.exists():
@@ -76,6 +77,10 @@ def _do_run(run_id: int | None) -> None:
 
             known = BookAiRepository.get_known_book_ids(conn)
             changed_records, _ = detect_changed_books(all_records, known)
+
+            if limit is not None and limit > 0:
+                changed_records = changed_records[:limit]
+                logger.info("Limiting run to first %d changed book(s)", limit)
 
             current_ids = {r.book_id for r in all_records}
             removed_count = BookAiRepository.delete_removed(conn, current_ids)

@@ -2,6 +2,7 @@
 
 {% block header %}
 <link rel="stylesheet" href="{{ url_for('static', filename='ai/ai-dashboard.css') }}">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 {% endblock %}
 
 {% block body %}

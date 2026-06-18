@@ -18,11 +18,9 @@ export class AiApiClient implements IAiApiClient {
     return this.http.get<IAiStatusResponse>("/status");
   }
 
-  public triggerIngestion(): Promise<ApiResult<IIngestionTriggerResponse>> {
-    return this.http.post<Record<string, never>, IIngestionTriggerResponse>(
-      "/ingestion/run",
-      {},
-    );
+  public triggerIngestion(limit?: number | null): Promise<ApiResult<IIngestionTriggerResponse>> {
+    const body = limit != null ? { limit } : {};
+    return this.http.post<typeof body, IIngestionTriggerResponse>("/ingestion/run", body);
   }
 
   public searchSemantic(

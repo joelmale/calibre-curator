@@ -14,18 +14,27 @@ export class HttpClient {
     return this.request<TResponse>("POST", path, body);
   }
 
+  private csrfToken(): string {
+    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? "";
+  }
+
   private async request<TResponse>(
     method: "GET" | "POST",
     path: string,
     body?: object,
   ): Promise<ApiResult<TResponse>> {
     try {
+      const headers: Record<string, string> = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      };
+      if (method === "POST") {
+        const token = this.csrfToken();
+        if (token) headers["X-CSRFToken"] = token;
+      }
       const init: RequestInit = {
         method,
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-        },
+        headers,
         credentials: "same-origin",
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       };

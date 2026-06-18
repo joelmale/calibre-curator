@@ -21,12 +21,20 @@ def trigger_run():
             "detail": "An ingestion run is already in progress",
         }), 409
 
-    # Create the DB row before spawning so we can return its ID immediately
+    body = request.get_json(silent=True) or {}
+    raw_limit = body.get("limit")
+    limit: int | None = None
+    if raw_limit is not None:
+        try:
+            limit = max(1, int(raw_limit))
+        except (TypeError, ValueError):
+            pass
+
     with get_db() as conn:
         run_id = IngestionRunRepository.start(conn)
 
     def _run() -> None:
-        run_pipeline_once(run_id=run_id)
+        run_pipeline_once(run_id=run_id, limit=limit)
 
     thread = threading.Thread(
         target=_run,
@@ -35,7 +43,7 @@ def trigger_run():
     )
     thread.start()
 
-    return jsonify({"runId": run_id, "status": "queued"}), 202
+    return jsonify({"runId": run_id, "status": "queued", "limit": limit}), 202
 
 
 @ingestion_bp.route("/runs/latest")

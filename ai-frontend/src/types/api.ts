@@ -47,11 +47,12 @@ export interface IRecommendationsResponse {
 export interface IIngestionTriggerResponse {
   readonly runId: number;
   readonly status: string;
+  readonly limit: number | null;
 }
 
 export interface IAiApiClient {
   getStatus(): Promise<ApiResult<IAiStatusResponse>>;
-  triggerIngestion(): Promise<ApiResult<IIngestionTriggerResponse>>;
+  triggerIngestion(limit?: number | null): Promise<ApiResult<IIngestionTriggerResponse>>;
   searchSemantic(request: ISemanticSearchRequest): Promise<ApiResult<ISemanticSearchResponse>>;
   listCollections(): Promise<ApiResult<ICollectionsResponse>>;
   getCollection(collectionId: string): Promise<ApiResult<ICuratedCollection>>;
