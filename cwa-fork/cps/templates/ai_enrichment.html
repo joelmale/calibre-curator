@@ -26,8 +26,41 @@
   color: var(--ai-color-tag-new-text, #3c763d);
   border-color: var(--ai-color-tag-new-border, #d6e9c6);
 }
-.enrich-card { margin-bottom: 16px; }
+.enrich-card { margin-bottom: 16px; position: relative; }
 .enrich-card .panel-body label { font-weight: normal; }
+
+/* Sticky Action Bar */
+#bulk-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--ai-color-surface-alt, #f8f8f8);
+  border-top: 1px solid var(--ai-color-border, #ddd);
+  padding: 12px 24px;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 1000;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+#bulk-action-bar.visible {
+  transform: translateY(0);
+}
+[data-ai-theme="dark"] #bulk-action-bar {
+  background: var(--ai-color-surface-alt);
+  border-top-color: var(--ai-color-border);
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+}
+
+/* Card Checkbox overlay */
+.card-checkbox-wrapper {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
 
 /* Panel overrides for dark theme */
 [data-ai-theme="dark"] .panel-default {
@@ -117,29 +150,37 @@
       {% endif %}
 
       <ul class="nav nav-tabs" role="tablist" style="margin-bottom:16px">
-        <li role="presentation" class="active"><a href="#tab-queue" data-tab="queue">Queue</a></li>
+        <li role="presentation" class="active"><a href="#tab-audit" data-tab="audit">Library Health Audit</a></li>
         <li role="presentation"><a href="#tab-review" data-tab="review">Review <span id="review-count" class="badge"></span></a></li>
         <li role="presentation"><a href="#tab-applied" data-tab="applied">Applied</a></li>
       </ul>
 
-      {# ── Queue tab ─────────────────────────────────────────────────────── #}
-      <div id="tab-queue" class="tab-pane">
+      {# ── Audit tab ─────────────────────────────────────────────────────── #}
+      <div id="tab-audit" class="tab-pane">
         <p>
-          <span id="queue-summary" class="text-muted">Loading…</span>
+          <span id="audit-summary" class="text-muted">Loading…</span>
         </p>
         <p>
           <button id="batch-btn" class="btn btn-primary btn-sm">
-            Generate next <input id="batch-count" type="number" value="20" min="1" max="100"
-              style="width:60px" class="input-sm"> books
+            Queue top <input id="batch-count" type="number" value="20" min="1" max="100"
+              style="width:60px; color:#000;" class="input-sm"> for Generation
           </button>
-          <button id="queue-refresh" class="btn btn-default btn-sm">Refresh</button>
+          <button id="audit-refresh" class="btn btn-default btn-sm">Refresh</button>
         </p>
-        <div id="queue-table"></div>
+        <div id="audit-table"></div>
       </div>
 
       {# ── Review tab ────────────────────────────────────────────────────── #}
-      <div id="tab-review" class="tab-pane" style="display:none">
-        <p><button id="review-refresh" class="btn btn-default btn-sm">Refresh</button></p>
+      <div id="tab-review" class="tab-pane" style="display:none; padding-bottom: 80px;">
+        <p>
+          <button id="review-refresh" class="btn btn-default btn-sm">Refresh</button>
+          <span id="live-poll-indicator" class="text-muted" style="margin-left: 10px; font-size: 12px; display: none;">
+            <span class="glyphicon glyphicon-refresh" style="animation:spin 1s linear infinite"></span> Generating in background...
+          </span>
+        </p>
+        <div style="margin-bottom: 10px;">
+          <label><input type="checkbox" id="select-all-review"> Select All Cards</label>
+        </div>
         <div id="review-cards"></div>
       </div>
 
@@ -156,6 +197,17 @@
       <div id="enrich-error" class="alert alert-danger" style="display:none"></div>
 
     </div>
+  </div>
+</div>
+
+{# ── Bulk Action Bar ───────────────────────────────────────────────────── #}
+<div id="bulk-action-bar">
+  <div>
+    <strong id="bulk-selected-count">0</strong> suggestions selected
+  </div>
+  <div>
+    <button id="bulk-dismiss-btn" class="btn btn-default btn-sm" style="margin-right: 8px;">Dismiss Selected</button>
+    <button id="bulk-apply-btn" class="btn btn-success btn-sm">Apply Approved Fields</button>
   </div>
 </div>
 
@@ -177,10 +229,14 @@
   }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
 
-  var API = '/ai/api/enrichment';
+  var API_SIDECAR = '/ai/api/enrichment';
+  var API_CWA = '/ai/enrichment';
+  
   var spinner = document.getElementById('enrich-spinner');
   var spinnerLabel = document.getElementById('enrich-spinner-label');
   var errorBox = document.getElementById('enrich-error');
+  var pollInterval = null;
+  var isGenerating = false;
 
   function showSpinner(msg) { spinner.style.display = 'block'; spinnerLabel.textContent = msg || ''; }
   function hideSpinner() { spinner.style.display = 'none'; }
@@ -206,138 +262,268 @@
       e.preventDefault();
       tabs.forEach(function (t) { t.parentNode.classList.remove('active'); });
       a.parentNode.classList.add('active');
-      ['queue', 'review', 'applied'].forEach(function (name) {
+      ['audit', 'review', 'applied'].forEach(function (name) {
         document.getElementById('tab-' + name).style.display =
           (name === a.getAttribute('data-tab')) ? 'block' : 'none';
       });
+      updateBulkActionBar();
     });
   });
 
-  // ── Queue ─────────────────────────────────────────────────────────────
-  function loadQueue() {
-    clearError(); showSpinner('Loading queue…');
-    jget(API + '/queue?limit=50').then(function (res) {
+  // ── Audit ─────────────────────────────────────────────────────────────
+  function loadAudit() {
+    clearError(); showSpinner('Running library health audit…');
+    jget(API_CWA + '/audit?limit=100').then(function (res) {
       hideSpinner();
-      if (!res.ok) { showError('Queue error: ' + (res.data.detail || res.data.error)); return; }
-      document.getElementById('queue-summary').textContent =
-        res.data.totalCandidates + ' book(s) eligible (indexed, no tags). Showing ' +
+      if (!res.ok) { showError('Audit error: ' + (res.data.detail || res.data.error)); return; }
+      document.getElementById('audit-summary').textContent =
+        res.data.totalCandidates + ' book(s) flagged with bad metadata. Showing top ' +
         res.data.books.length + '.';
       var rows = res.data.books.map(function (b) {
+        var issuesHtml = b.issues.map(function(iss) {
+          return '<span class="tag-chip tag-new" style="background:#f2dede;color:#a94442;border-color:#ebccd1;">' + esc(iss) + '</span>';
+        }).join(' ');
         return '<tr><td>' + b.bookId + '</td><td>' + esc(b.title) +
           '<br><small class="text-muted">' + esc(b.authorSort) + '</small></td>' +
+          '<td>' + issuesHtml + '</td>' +
           '<td><button class="btn btn-xs btn-default gen-btn" data-id="' + b.bookId + '">Generate</button></td></tr>';
       }).join('');
-      document.getElementById('queue-table').innerHTML = rows
-        ? '<table class="table table-condensed table-striped"><thead><tr><th>#</th><th>Title / Author</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
-        : '<p class="text-muted">No eligible books — everything has tags or a pending suggestion.</p>';
+      document.getElementById('audit-table').innerHTML = rows
+        ? '<table class="table table-condensed table-striped"><thead><tr><th>#</th><th>Title / Author</th><th>Metadata Issues</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<p class="text-muted">Your library metadata looks great!</p>';
       document.querySelectorAll('.gen-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
           btn.disabled = true; btn.textContent = 'Generating…';
-          jpost(API + '/generate/' + btn.getAttribute('data-id'), {}).then(function (r) {
+          startPolling();
+          jpost(API_SIDECAR + '/generate/' + btn.getAttribute('data-id'), {}).then(function (r) {
             if (!r.ok) { btn.textContent = 'Error'; showError(r.data.detail || r.data.error); }
-            else { btn.textContent = 'Done ✓'; }
+            else { btn.textContent = 'Done ✓'; loadReview(); }
           });
         });
       });
     });
   }
 
-  document.getElementById('queue-refresh').addEventListener('click', loadQueue);
+  document.getElementById('audit-refresh').addEventListener('click', loadAudit);
   document.getElementById('batch-btn').addEventListener('click', function () {
     var n = parseInt(document.getElementById('batch-count').value, 10) || 20;
     clearError(); showSpinner('Queueing ' + n + ' books for background generation…');
-    jpost(API + '/queue/batch', { count: n }).then(function (r) {
+    jpost(API_SIDECAR + '/queue/batch', { count: n }).then(function (r) {
       hideSpinner();
       if (!r.ok) { showError(r.data.detail || r.data.error); return; }
       showError(''); errorBox.style.display = 'none';
-      document.getElementById('queue-summary').textContent =
-        'Queued ' + r.data.queued + ' book(s). Suggestions appear in the Review tab as they finish.';
+      document.getElementById('audit-summary').textContent =
+        'Queued ' + r.data.queued + ' book(s). Suggestions will automatically appear in the Review tab as they finish.';
+      startPolling();
     });
   });
+
+  // ── Polling & Live Updates ────────────────────────────────────────────
+  function startPolling() {
+    if (pollInterval) return;
+    isGenerating = true;
+    document.getElementById('live-poll-indicator').style.display = 'inline';
+    pollInterval = setInterval(function() {
+      // Just silently reload review queue
+      jget(API_SIDECAR + '/suggestions?limit=100').then(function (res) {
+        if (res.ok) {
+          var list = res.data.suggestions;
+          document.getElementById('review-count').textContent = list.length || '';
+          renderReviewCards(list, true); // true = preserve selections
+        }
+      });
+      // Optionally we could poll a status endpoint to know when to stop, 
+      // but for now we stop when the user navigates away or after 10 mins.
+    }, 5000);
+    
+    // Auto-stop polling after 10 mins as a fallback
+    setTimeout(stopPolling, 10 * 60 * 1000);
+  }
+  
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    isGenerating = false;
+    document.getElementById('live-poll-indicator').style.display = 'none';
+  }
 
   // ── Review ────────────────────────────────────────────────────────────
   function loadReview() {
     clearError(); showSpinner('Loading suggestions…');
-    jget(API + '/suggestions?limit=100').then(function (res) {
+    jget(API_SIDECAR + '/suggestions?limit=100').then(function (res) {
       hideSpinner();
       if (!res.ok) { showError(res.data.detail || res.data.error); return; }
       var list = res.data.suggestions;
       document.getElementById('review-count').textContent = list.length || '';
       if (!list.length) {
         document.getElementById('review-cards').innerHTML = '<p class="text-muted">No suggestions awaiting review.</p>';
+        stopPolling();
         return;
       }
-      document.getElementById('review-cards').innerHTML = list.map(renderCard).join('');
-      list.forEach(wireCard);
+      renderReviewCards(list, false);
     });
   }
 
-  function renderCard(s) {
-    var conf = s.confidence != null ? Math.round(s.confidence * 100) + '% confidence' : '';
-    var curTags = (s.currentTags || []).map(function (t) { return '<span class="tag-chip">' + esc(t) + '</span>'; }).join(' ') || '<em class="text-muted">none</em>';
-    var newTags = (s.suggestedTags || []).map(function (t) { return '<span class="tag-chip tag-new">' + esc(t) + '</span>'; }).join(' ') || '<em class="text-muted">none</em>';
-    return '' +
-      '<div class="panel panel-default enrich-card" data-id="' + s.bookId + '">' +
-        '<div class="panel-heading"><strong>' + esc(s.title) + '</strong> ' +
-          '<small class="text-muted">' + esc(s.authorSort) + ' · ' + esc(s.suggestedReadingLevel || '') + ' · ' + conf + '</small></div>' +
-        '<div class="panel-body">' +
-          '<div class="row"><div class="col-sm-6">' +
-            '<p><strong>Current tags:</strong><br>' + curTags + '</p>' +
-          '</div><div class="col-sm-6">' +
-            '<div class="checkbox"><label><input type="checkbox" class="approve-tags" checked> ' +
-              '<strong>Apply suggested tags:</strong></label></div>' + newTags +
-          '</div></div>' +
-          '<hr>' +
-          '<div class="checkbox"><label><input type="checkbox" class="approve-desc" checked> ' +
-            '<strong>Apply description</strong></label></div>' +
-          '<textarea class="form-control desc-text" rows="3">' + esc(s.suggestedDescription || '') + '</textarea>' +
-          '<div style="margin-top:10px">' +
-            '<button class="btn btn-success btn-sm apply-btn">Apply approved fields</button> ' +
-            '<button class="btn btn-default btn-sm dismiss-btn">Dismiss</button> ' +
-            '<span class="apply-status text-muted" style="margin-left:8px"></span>' +
+  function renderReviewCards(list, preserveSelections) {
+    var selectedIds = new Set();
+    if (preserveSelections) {
+      document.querySelectorAll('.card-checkbox:checked').forEach(function(cb) {
+        selectedIds.add(parseInt(cb.value, 10));
+      });
+    }
+
+    if (!list.length) {
+      document.getElementById('review-cards').innerHTML = '<p class="text-muted">No suggestions awaiting review.</p>';
+      updateBulkActionBar();
+      return;
+    }
+
+    document.getElementById('review-cards').innerHTML = list.map(function(s) {
+      var isChecked = selectedIds.has(s.bookId) ? 'checked' : '';
+      var conf = s.confidence != null ? Math.round(s.confidence * 100) + '% confidence' : '';
+      var curTags = (s.currentTags || []).map(function (t) { return '<span class="tag-chip">' + esc(t) + '</span>'; }).join(' ') || '<em class="text-muted">none</em>';
+      var newTags = (s.suggestedTags || []).map(function (t) { return '<span class="tag-chip tag-new">' + esc(t) + '</span>'; }).join(' ') || '<em class="text-muted">none</em>';
+      return '' +
+        '<div class="panel panel-default enrich-card" data-id="' + s.bookId + '">' +
+          '<div class="card-checkbox-wrapper">' +
+            '<input type="checkbox" class="card-checkbox" value="' + s.bookId + '" ' + isChecked + ' style="transform: scale(1.5); cursor: pointer;">' +
           '</div>' +
-        '</div>' +
-      '</div>';
-  }
-
-  function wireCard(s) {
-    var card = document.querySelector('.enrich-card[data-id="' + s.bookId + '"]');
-    if (!card) return;
-    var statusEl = card.querySelector('.apply-status');
-
-    card.querySelector('.apply-btn').addEventListener('click', function () {
-      var payload = { bookId: s.bookId, decision: {} };
-      if (card.querySelector('.approve-tags').checked) { payload.tags = s.suggestedTags || []; payload.decision.tags = 'accept'; }
-      else { payload.decision.tags = 'reject'; }
-      if (card.querySelector('.approve-desc').checked) { payload.description = card.querySelector('.desc-text').value; payload.decision.description = 'accept'; }
-      else { payload.decision.description = 'reject'; }
-      payload.readingLevel = s.suggestedReadingLevel || null;
-
-      if (payload.tags === undefined && payload.description === undefined) {
-        statusEl.textContent = 'Nothing approved — use Dismiss instead.'; return;
-      }
-      statusEl.textContent = 'Applying…';
-      jpost('/ai/enrichment/apply', payload).then(function (r) {
-        if (!r.ok) { statusEl.textContent = 'Error: ' + (r.data.detail || r.data.error); }
-        else { card.style.opacity = '0.5'; statusEl.textContent = 'Applied ✓'; }
-      });
+          '<div class="panel-heading"><strong>' + esc(s.title) + '</strong> ' +
+            '<small class="text-muted">' + esc(s.authorSort) + ' · ' + esc(s.suggestedReadingLevel || '') + ' · ' + conf + '</small></div>' +
+          '<div class="panel-body">' +
+            '<div class="row"><div class="col-sm-6">' +
+              '<p><strong>Current tags:</strong><br>' + curTags + '</p>' +
+            '</div><div class="col-sm-6">' +
+              '<div class="checkbox"><label><input type="checkbox" class="approve-tags" checked> ' +
+                '<strong>Apply suggested tags:</strong></label></div>' + newTags +
+            '</div></div>' +
+            '<hr>' +
+            '<div class="checkbox"><label><input type="checkbox" class="approve-desc" checked> ' +
+              '<strong>Apply description</strong></label></div>' +
+            '<textarea class="form-control desc-text" rows="3">' + esc(s.suggestedDescription || '') + '</textarea>' +
+            '<div style="margin-top:10px; display:none;" class="card-action-result">' +
+              '<span class="apply-status text-muted"></span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    }).join('');
+    
+    // Re-wire events
+    document.querySelectorAll('.card-checkbox').forEach(function(cb) {
+      cb.addEventListener('change', updateBulkActionBar);
     });
-
-    card.querySelector('.dismiss-btn').addEventListener('click', function () {
-      statusEl.textContent = 'Dismissing…';
-      jpost(API + '/dismiss/' + s.bookId, {}).then(function (r) {
-        if (!r.ok) { statusEl.textContent = 'Error'; }
-        else { card.style.opacity = '0.5'; statusEl.textContent = 'Dismissed'; }
-      });
-    });
+    
+    updateBulkActionBar();
   }
 
   document.getElementById('review-refresh').addEventListener('click', loadReview);
+  
+  document.getElementById('select-all-review').addEventListener('change', function(e) {
+    var checked = e.target.checked;
+    document.querySelectorAll('.card-checkbox').forEach(function(cb) {
+      cb.checked = checked;
+    });
+    updateBulkActionBar();
+  });
+
+  function updateBulkActionBar() {
+    var selectedCount = document.querySelectorAll('.card-checkbox:checked').length;
+    var bar = document.getElementById('bulk-action-bar');
+    var isReviewTab = document.getElementById('tab-review').style.display !== 'none';
+    
+    if (selectedCount > 0 && isReviewTab) {
+      document.getElementById('bulk-selected-count').textContent = selectedCount;
+      bar.classList.add('visible');
+    } else {
+      bar.classList.remove('visible');
+    }
+  }
+
+  // Bulk Apply
+  document.getElementById('bulk-apply-btn').addEventListener('click', function() {
+    var selectedCards = [];
+    document.querySelectorAll('.card-checkbox:checked').forEach(function(cb) {
+      var card = cb.closest('.enrich-card');
+      var bookId = parseInt(cb.value, 10);
+      var tagsChecked = card.querySelector('.approve-tags').checked;
+      var descChecked = card.querySelector('.approve-desc').checked;
+      
+      var rawTags = card.querySelector('.tag-new') ? Array.from(card.querySelectorAll('.tag-new')).map(function(el){return el.textContent;}) : [];
+      var rawDesc = card.querySelector('.desc-text').value;
+      
+      var item = {
+        bookId: bookId,
+        decision: {
+          tags: tagsChecked ? 'accept' : 'reject',
+          description: descChecked ? 'accept' : 'reject'
+        }
+      };
+      
+      if (tagsChecked) item.tags = rawTags;
+      if (descChecked) item.description = rawDesc;
+      
+      selectedCards.push(item);
+    });
+    
+    if (!selectedCards.length) return;
+    
+    document.getElementById('bulk-apply-btn').disabled = true;
+    document.getElementById('bulk-apply-btn').textContent = 'Applying...';
+    
+    jpost(API_CWA + '/apply/batch', { items: selectedCards }).then(function(r) {
+      document.getElementById('bulk-apply-btn').disabled = false;
+      document.getElementById('bulk-apply-btn').textContent = 'Apply Approved Fields';
+      
+      if (!r.ok) {
+        showError('Batch apply error: ' + (r.data.detail || r.data.error));
+      } else {
+        // Mark cards as done
+        selectedCards.forEach(function(item) {
+          var card = document.querySelector('.enrich-card[data-id="' + item.bookId + '"]');
+          if (card) {
+            card.style.opacity = '0.5';
+            var cb = card.querySelector('.card-checkbox');
+            if (cb) cb.checked = false;
+          }
+        });
+        updateBulkActionBar();
+        setTimeout(loadReview, 1000);
+        loadApplied();
+      }
+    });
+  });
+
+  // Bulk Dismiss
+  document.getElementById('bulk-dismiss-btn').addEventListener('click', function() {
+    var selectedIds = [];
+    document.querySelectorAll('.card-checkbox:checked').forEach(function(cb) {
+      selectedIds.push(parseInt(cb.value, 10));
+    });
+    
+    if (!selectedIds.length) return;
+    
+    document.getElementById('bulk-dismiss-btn').disabled = true;
+    document.getElementById('bulk-dismiss-btn').textContent = 'Dismissing...';
+    
+    // We don't have a batch dismiss endpoint yet, so we just loop
+    var promises = selectedIds.map(function(id) {
+      return jpost(API_SIDECAR + '/dismiss/' + id, {});
+    });
+    
+    Promise.all(promises).then(function() {
+      document.getElementById('bulk-dismiss-btn').disabled = false;
+      document.getElementById('bulk-dismiss-btn').textContent = 'Dismiss Selected';
+      updateBulkActionBar();
+      loadReview();
+    });
+  });
 
   // ── Applied ───────────────────────────────────────────────────────────
   function loadApplied() {
     clearError(); showSpinner('Loading audit log…');
-    jget(API + '/reviews?limit=100').then(function (res) {
+    jget(API_SIDECAR + '/reviews?limit=100').then(function (res) {
       hideSpinner();
       if (!res.ok) { showError(res.data.detail || res.data.error); return; }
       var rows = res.data.reviews.map(function (r) {
@@ -358,7 +544,7 @@
   document.getElementById('applied-refresh').addEventListener('click', loadApplied);
 
   // Initial load
-  loadQueue();
+  loadAudit();
   loadReview();
 })();
 </script>

@@ -335,6 +335,63 @@ def enrichment_index():
     )
 
 
+@ai_bridge.route("/enrichment/audit", methods=["GET"])
+@user_login_required
+def enrichment_audit():
+    if not _is_admin():
+        return jsonify({"error": "admin_required"}), 403
+
+    limit = min(int(request.args.get("limit", 50)), 500)
+    
+    # Identify books with poor metadata directly from calibre DB
+    query = """
+        SELECT 
+            b.id as bookId, b.title, b.author_sort as authorSort,
+            c.text as description,
+            (SELECT COUNT(*) FROM books_tags_link btl WHERE btl.book = b.id) as tag_count
+        FROM books b
+        LEFT JOIN comments c ON c.book = b.id
+        ORDER BY b.id DESC
+    """
+    
+    results = []
+    with _calibre_conn() as conn:
+        rows = conn.execute(query).fetchall()
+        
+    for r in rows:
+        issues = []
+        if not r["description"] or not r["description"].strip():
+            issues.append("Missing description")
+        if r["tag_count"] == 0:
+            issues.append("No tags")
+            
+        title = r["title"] or ""
+        if "_" in title or ".epub" in title.lower() or ".azw3" in title.lower() or "-" in title:
+            issues.append("Malformed title")
+        elif title.isupper() and len(title) > 4:
+            issues.append("Title in ALL CAPS")
+            
+        if not r["authorSort"] or r["authorSort"].lower() in ["unknown", "anonymous"]:
+            issues.append("Missing author")
+            
+        if issues:
+            results.append({
+                "bookId": r["bookId"],
+                "title": title,
+                "authorSort": r["authorSort"] or "",
+                "issues": issues,
+                "score": len(issues)
+            })
+            
+    # Sort by score (worst first), then slice
+    results.sort(key=lambda x: x["score"], reverse=True)
+    
+    return jsonify({
+        "totalCandidates": len(results),
+        "books": results[:limit]
+    })
+
+
 def _sidecar_post(subpath: str, payload: dict) -> tuple[dict, int]:
     """POST JSON to the sidecar API and return (json, status)."""
     url = f"{SIDECAR_BASE_URL}/api/v1/{subpath}"
@@ -406,6 +463,78 @@ def enrichment_apply():
     if writeback_status == "failed":
         return jsonify({"error": "writeback_failed", "detail": writeback_error}), 500
     return jsonify({"ok": True, "bookId": book_id})
+
+
+@ai_bridge.route("/enrichment/apply/batch", methods=["POST"])
+@user_login_required
+def enrichment_apply_batch():
+    if not _is_admin():
+        return jsonify({"error": "admin_required"}), 403
+    if not os.path.isfile(_CALIBREDB):
+        return jsonify({"error": f"calibredb not found at {_CALIBREDB}"}), 503
+
+    body = request.get_json(silent=True) or {}
+    items = body.get("items", [])
+    if not isinstance(items, list):
+        return jsonify({"error": "items must be a list"}), 400
+
+    results = []
+    
+    # We execute each application synchronously but quickly, calibredb is fast enough
+    # for batches of 10-20.
+    for item in items:
+        try:
+            book_id = int(item["bookId"])
+        except (KeyError, TypeError, ValueError):
+            results.append({"error": "Invalid bookId", "item": item})
+            continue
+
+        apply_tags = item.get("tags")
+        apply_desc = item.get("description")
+        reading_level = item.get("readingLevel")
+
+        fields = []
+        if isinstance(apply_tags, list):
+            fields += ["--field", "tags:" + ",".join(str(t) for t in apply_tags)]
+        if isinstance(apply_desc, str) and apply_desc.strip():
+            fields += ["--field", f"comments:{apply_desc.strip()}"]
+
+        if not fields:
+            results.append({"bookId": book_id, "status": "skipped", "error": "No fields approved"})
+            continue
+
+        writeback_status = "applied"
+        writeback_error = None
+        try:
+            proc = subprocess.run(
+                [_CALIBREDB, "--with-library", _CALIBRE_LIB,
+                 "set_metadata", str(book_id), *fields],
+                capture_output=True, text=True, timeout=60,
+            )
+            if proc.returncode != 0:
+                writeback_status = "failed"
+                writeback_error = (proc.stderr or proc.stdout or "calibredb error").strip()
+        except Exception as exc:
+            writeback_status = "failed"
+            writeback_error = str(exc)
+
+        _sidecar_post("enrichment/review", {
+            "bookId": book_id,
+            "appliedTags": apply_tags if isinstance(apply_tags, list) else None,
+            "appliedDescription": apply_desc if isinstance(apply_desc, str) else None,
+            "appliedReadingLevel": reading_level,
+            "decision": item.get("decision") or {},
+            "writebackStatus": writeback_status,
+            "writebackError": writeback_error,
+        })
+        
+        results.append({
+            "bookId": book_id,
+            "status": writeback_status,
+            "error": writeback_error
+        })
+
+    return jsonify({"ok": True, "results": results})
 
 
 @ai_bridge.route("/api/<path:subpath>", methods=["GET", "POST"])
