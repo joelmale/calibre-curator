@@ -235,6 +235,20 @@ def preview_file(session_id, name):
     if not os.path.exists(book_dir):
         return "Session not found", 404
         
+@app.route('/api/v1/recover', methods=['GET'])
+def recover_db():
+    try:
+        proc = subprocess.run(
+            [CALIBREDB_BIN, "--with-library", CALIBRE_LIB, "restore_database", "--really-do-it"],
+            capture_output=True, text=True, timeout=300
+        )
+        if proc.returncode == 0:
+            return jsonify({"ok": True, "log": proc.stdout})
+        else:
+            return jsonify({"error": proc.stderr}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
     if '..' in name:
         return "Invalid name", 400
         
