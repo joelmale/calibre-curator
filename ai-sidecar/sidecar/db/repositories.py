@@ -350,6 +350,8 @@ class EnrichmentRepository:
         tags: list[str],
         description: str | None,
         reading_level: str | None,
+        series_name: str | None,
+        series_index: float | None,
         confidence: float | None,
         chat_model: str,
     ) -> None:
@@ -357,13 +359,15 @@ class EnrichmentRepository:
             """
             INSERT INTO enrichment_suggestions (
                 calibre_book_id, suggested_tags_json, suggested_description,
-                suggested_reading_level, confidence, chat_model,
-                review_status, generated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+                suggested_reading_level, suggested_series_name, suggested_series_index,
+                confidence, chat_model, review_status, generated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
             ON CONFLICT(calibre_book_id) DO UPDATE SET
                 suggested_tags_json     = excluded.suggested_tags_json,
                 suggested_description   = excluded.suggested_description,
                 suggested_reading_level = excluded.suggested_reading_level,
+                suggested_series_name   = excluded.suggested_series_name,
+                suggested_series_index  = excluded.suggested_series_index,
                 confidence              = excluded.confidence,
                 chat_model              = excluded.chat_model,
                 review_status           = 'pending',
@@ -374,6 +378,8 @@ class EnrichmentRepository:
                 json.dumps(tags),
                 description,
                 reading_level,
+                series_name,
+                series_index,
                 confidence,
                 chat_model,
                 _now(),
@@ -462,6 +468,8 @@ class EnrichmentRepository:
         applied_tags: list[str] | None,
         applied_description: str | None,
         applied_reading_level: str | None,
+        applied_series_name: str | None,
+        applied_series_index: float | None,
         decision: dict,
         writeback_status: str,
         writeback_error: str | None = None,
@@ -471,15 +479,18 @@ class EnrichmentRepository:
             """
             INSERT INTO enrichment_reviews (
                 calibre_book_id, applied_tags_json, applied_description,
-                applied_reading_level, decision_json, reviewer,
+                applied_reading_level, applied_series_name, applied_series_index,
+                decision_json, reviewer,
                 writeback_status, writeback_error, applied_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 calibre_book_id,
                 json.dumps(applied_tags) if applied_tags is not None else None,
                 applied_description,
                 applied_reading_level,
+                applied_series_name,
+                applied_series_index,
                 json.dumps(decision),
                 reviewer,
                 writeback_status,

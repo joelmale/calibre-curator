@@ -62,11 +62,11 @@ export function createAiStatusPanel(s: IAiStatusResponse): HTMLElement {
   // Pending-backlog hint (user-visible counterpart to the Part-1 fix)
   if (s.library.pendingBookCount > 0) {
     const lastRun = s.lastIngestionRun;
-    const wasStuck = !lastRun || (lastRun.embeddedChunks === 0 && lastRun.changedBooks === 0);
+    const wasStuck = !lastRun || (lastRun.status !== "running" && lastRun.embeddedChunks === 0 && lastRun.changedBooks === 0);
     if (wasStuck) {
       const hint = document.createElement("div");
-      hint.className = "alert alert-info";
-      hint.style.cssText = "margin:4px 0 0;font-size:12px;";
+      hint.className = "alert-info";
+      hint.style.cssText = "margin:4px 0 0;font-size:12px;padding:8px;border:1px solid;border-radius:4px;";
       hint.textContent =
         `${s.library.pendingBookCount.toLocaleString()} book${s.library.pendingBookCount === 1 ? "" : "s"} pending — they'll be processed on upcoming scans.`;
       libContainer.appendChild(hint);

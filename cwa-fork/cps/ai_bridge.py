@@ -515,12 +515,18 @@ def enrichment_apply_batch():
         apply_tags = item.get("tags")
         apply_desc = item.get("description")
         reading_level = item.get("readingLevel")
+        series_name = item.get("seriesName")
+        series_index = item.get("seriesIndex")
 
         fields = []
         if isinstance(apply_tags, list):
             fields += ["--field", "tags:" + ",".join(str(t) for t in apply_tags)]
         if isinstance(apply_desc, str) and apply_desc.strip():
             fields += ["--field", f"comments:{apply_desc.strip()}"]
+        if isinstance(series_name, str) and series_name.strip():
+            fields += ["--field", f"series:{series_name.strip()}"]
+            if series_index is not None:
+                fields += ["--field", f"series_index:{series_index}"]
 
         if not fields:
             results.append({"bookId": book_id, "status": "skipped", "error": "No fields approved"})
@@ -546,6 +552,8 @@ def enrichment_apply_batch():
             "appliedTags": apply_tags if isinstance(apply_tags, list) else None,
             "appliedDescription": apply_desc if isinstance(apply_desc, str) else None,
             "appliedReadingLevel": reading_level,
+            "appliedSeriesName": series_name if isinstance(series_name, str) else None,
+            "appliedSeriesIndex": series_index,
             "decision": item.get("decision") or {},
             "writebackStatus": writeback_status,
             "writebackError": writeback_error,

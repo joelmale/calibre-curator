@@ -416,6 +416,13 @@
                 '<strong>Apply suggested tags:</strong></label></div>' + newTags +
             '</div></div>' +
             '<hr>' +
+            (s.suggestedSeriesName ? 
+              '<hr><div class="checkbox"><label><input type="checkbox" class="approve-series" checked> ' +
+              '<strong>Apply series:</strong> <span class="tag-chip" style="background:#eef8eb;color:#2d5a27;border-color:#c3e6cb;">' + esc(s.suggestedSeriesName) + (s.suggestedSeriesIndex != null ? ' #' + s.suggestedSeriesIndex : '') + '</span></label></div>' +
+              '<input type="hidden" class="series-name-val" value="' + esc(s.suggestedSeriesName) + '">' +
+              '<input type="hidden" class="series-index-val" value="' + (s.suggestedSeriesIndex != null ? s.suggestedSeriesIndex : '') + '">'
+            : '') +
+            '<hr>' +
             '<div class="checkbox"><label><input type="checkbox" class="approve-desc" checked> ' +
               '<strong>Apply description</strong></label></div>' +
             '<textarea class="form-control desc-text" rows="3">' + esc(s.suggestedDescription || '') + '</textarea>' +
@@ -465,9 +472,12 @@
       var bookId = parseInt(cb.value, 10);
       var tagsChecked = card.querySelector('.approve-tags').checked;
       var descChecked = card.querySelector('.approve-desc').checked;
+      var seriesChecked = card.querySelector('.approve-series') ? card.querySelector('.approve-series').checked : false;
       
-      var rawTags = card.querySelector('.tag-new') ? Array.from(card.querySelectorAll('.tag-new')).map(function(el){return el.textContent;}) : [];
+      var rawTags = card.querySelector('.tag-new') ? Array.from(card.querySelectorAll('.tag-new')).map(function(el){return el.textContent;}).filter(function(t){ return !t.includes('#'); }) : [];
       var rawDesc = card.querySelector('.desc-text').value;
+      var rawSeriesName = card.querySelector('.series-name-val') ? card.querySelector('.series-name-val').value : null;
+      var rawSeriesIdxStr = card.querySelector('.series-index-val') ? card.querySelector('.series-index-val').value : null;
       
       var item = {
         bookId: bookId,
@@ -476,9 +486,16 @@
           description: descChecked ? 'accept' : 'reject'
         }
       };
+      if (seriesChecked) item.decision.series = 'accept';
       
       if (tagsChecked) item.tags = rawTags;
       if (descChecked) item.description = rawDesc;
+      if (seriesChecked) {
+        item.seriesName = rawSeriesName;
+        if (rawSeriesIdxStr !== null && rawSeriesIdxStr !== '') {
+            item.seriesIndex = parseFloat(rawSeriesIdxStr);
+        }
+      }
       
       selectedCards.push(item);
     });
@@ -550,10 +567,11 @@
         return '<tr><td>' + r.bookId + '</td><td>' + esc(r.title) + '</td>' +
           '<td>' + badge + '</td><td>' + tags + '</td>' +
           '<td>' + (r.appliedDescription ? '✓' : '—') + '</td>' +
+          '<td>' + (r.appliedSeriesName ? esc(r.appliedSeriesName) + (r.appliedSeriesIndex != null ? ' #' + r.appliedSeriesIndex : '') : '—') + '</td>' +
           '<td><small>' + esc(r.appliedAt) + '</small></td></tr>';
       }).join('');
       document.getElementById('applied-table').innerHTML = rows
-        ? '<table class="table table-condensed table-striped"><thead><tr><th>#</th><th>Title</th><th>Status</th><th>Tags</th><th>Desc</th><th>When</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        ? '<table class="table table-condensed table-striped"><thead><tr><th>#</th><th>Title</th><th>Status</th><th>Tags</th><th>Desc</th><th>Series</th><th>When</th></tr></thead><tbody>' + rows + '</tbody></table>'
         : '<p class="text-muted">Nothing applied yet.</p>';
     });
   }

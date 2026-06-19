@@ -25,8 +25,8 @@ export function createAiRunStats(run: IIngestionRunStatus): HTMLElement {
   if (isRunning) {
     // Show a clear "in-progress" message rather than misleading 0s
     const notice = document.createElement("div");
-    notice.className = "alert alert-info";
-    notice.style.cssText = "margin:8px;font-size:12px;";
+    notice.className = "alert-info";
+    notice.style.cssText = "margin:8px;font-size:12px;padding:8px;border:1px solid;border-radius:4px;";
     notice.innerHTML = `<strong>Run in progress</strong> — started ${formatRelativeTime(run.startedAt)}. Refresh in a moment to see results.`;
     wrapper.appendChild(notice);
     return wrapper;

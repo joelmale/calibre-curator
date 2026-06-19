@@ -25,6 +25,8 @@ _SUGGESTION_SCHEMA = {
         "tags": {"type": "array", "items": {"type": "string"}},
         "description": {"type": "string"},
         "readingLevel": {"type": "string"},
+        "seriesName": {"type": "string"},
+        "seriesIndex": {"type": "number"},
         "confidence": {"type": "number"},
     },
     "required": ["tags", "description", "readingLevel", "confidence"],
@@ -37,8 +39,10 @@ _SYSTEM_PROMPT = (
     "Tags must be 3-8 lowercase subject keywords (genres, themes, topics, period). "
     "The description is a single neutral paragraph (40-80 words), no spoilers, no "
     "marketing language. readingLevel is one of: children, middle-grade, "
-    "young-adult, general-adult, academic. confidence is 0.0-1.0 reflecting how "
-    "sure you are given the excerpt."
+    "young-adult, general-adult, academic. "
+    "If the excerpt clearly indicates the book is part of a series (e.g. 'Book 1 of The Expanse'), "
+    "extract the seriesName and the seriesIndex as a number. If not, omit them or leave them null. "
+    "confidence is 0.0-1.0 reflecting how sure you are given the excerpt."
 )
 
 
@@ -63,6 +67,15 @@ def _coerce_suggestion(raw: dict) -> dict:
     reading_level = raw.get("readingLevel")
     reading_level = str(reading_level).strip() if reading_level else None
 
+    series_name = raw.get("seriesName")
+    series_name = str(series_name).strip() if series_name else None
+
+    try:
+        series_index = raw.get("seriesIndex")
+        series_index = float(series_index) if series_index is not None else None
+    except (TypeError, ValueError):
+        series_index = None
+
     try:
         confidence = float(raw.get("confidence"))
         confidence = max(0.0, min(1.0, confidence))
@@ -73,6 +86,8 @@ def _coerce_suggestion(raw: dict) -> dict:
         "tags": tags,
         "description": description,
         "readingLevel": reading_level,
+        "seriesName": series_name,
+        "seriesIndex": series_index,
         "confidence": confidence,
     }
 
@@ -103,6 +118,8 @@ def _generate_for_book(conn, config, chat, calibre_book_id: int) -> dict:
         tags=suggestion["tags"],
         description=suggestion["description"],
         reading_level=suggestion["readingLevel"],
+        series_name=suggestion["seriesName"],
+        series_index=suggestion["seriesIndex"],
         confidence=suggestion["confidence"],
         chat_model=chat.model_name,
     )
@@ -185,6 +202,8 @@ def suggestions():
                 "suggestedTags": json.loads(r["suggested_tags_json"] or "[]"),
                 "suggestedDescription": r["suggested_description"],
                 "suggestedReadingLevel": r["suggested_reading_level"],
+                "suggestedSeriesName": r["suggested_series_name"],
+                "suggestedSeriesIndex": r["suggested_series_index"],
                 "confidence": r["confidence"],
                 "chatModel": r["chat_model"],
                 "generatedAt": r["generated_at"],
@@ -220,6 +239,8 @@ def review():
             applied_tags=applied_tags,
             applied_description=body.get("appliedDescription"),
             applied_reading_level=body.get("appliedReadingLevel"),
+            applied_series_name=body.get("appliedSeriesName"),
+            applied_series_index=body.get("appliedSeriesIndex"),
             decision=body.get("decision") or {},
             writeback_status=body.get("writebackStatus", "applied"),
             writeback_error=body.get("writebackError"),
@@ -252,6 +273,8 @@ def reviews():
                 "appliedTags": json.loads(r["applied_tags_json"]) if r["applied_tags_json"] else None,
                 "appliedDescription": r["applied_description"],
                 "appliedReadingLevel": r["applied_reading_level"],
+                "appliedSeriesName": r["applied_series_name"],
+                "appliedSeriesIndex": r["applied_series_index"],
                 "writebackStatus": r["writeback_status"],
                 "writebackError": r["writeback_error"],
                 "reviewer": r["reviewer"],

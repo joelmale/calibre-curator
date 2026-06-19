@@ -150,6 +150,8 @@ CREATE TABLE IF NOT EXISTS enrichment_suggestions (
     suggested_tags_json     TEXT NOT NULL DEFAULT '[]',
     suggested_description   TEXT,
     suggested_reading_level TEXT,
+    suggested_series_name   TEXT,
+    suggested_series_index  REAL,
     confidence              REAL,
     chat_model              TEXT,
     review_status           TEXT NOT NULL DEFAULT 'pending',  -- pending|reviewed|dismissed
@@ -163,6 +165,8 @@ CREATE TABLE IF NOT EXISTS enrichment_reviews (
     applied_tags_json   TEXT,                 -- NULL when the tags field was rejected
     applied_description TEXT,                 -- NULL when the blurb was rejected
     applied_reading_level TEXT,
+    applied_series_name TEXT,
+    applied_series_index REAL,
     decision_json       TEXT NOT NULL,        -- per-field accept/reject/edit record
     reviewer            TEXT NOT NULL DEFAULT 'admin',
     writeback_status    TEXT NOT NULL,        -- applied|failed
