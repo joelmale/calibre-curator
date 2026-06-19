@@ -307,4 +307,19 @@ def health():
     return "OK\n"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8091)
+    # Auto-recovery of database if corrupted
+    print("Checking database health...")
+    try:
+        conn = _calibre_conn()
+        conn.execute("SELECT count(*) FROM books")
+        conn.close()
+        print("Database is healthy.")
+    except sqlite3.DatabaseError:
+        print("Database is corrupted. Starting recovery process...")
+        try:
+            subprocess.run([CALIBREDB_BIN, "--with-library", CALIBRE_LIB, "restore_database", "--really-do-it"], check=True)
+            print("Database recovered successfully.")
+        except Exception as e:
+            print(f"Failed to recover database: {e}")
+
+    app.run(host='0.0.0.0', port=8091, debug=True)
