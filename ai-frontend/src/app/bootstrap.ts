@@ -27,7 +27,18 @@ const routes: readonly IRoute[] = [
   { hash: "#sequences", mount: (c) => new AiSequencePage(c, client).mount() },
 ];
 
+import { AiEditBookPage } from "../components/pages/AiEditBookPage";
+
 function render(container: HTMLElement): void {
+  const path = window.location.pathname;
+  if (path.startsWith("/ai/editor/")) {
+    const parts = path.split("/");
+    const bookId = parseInt(parts[3] || "0", 10);
+    const format = parts[4] || "";
+    new AiEditBookPage(container, client, bookId, format).mount();
+    return;
+  }
+
   const active = window.location.hash;
   const route = routes.find((r) => r.hash === active) ?? routes[0]!;
   container.innerHTML = "";

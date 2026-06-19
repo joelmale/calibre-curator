@@ -21,3 +21,7 @@ RUN python3 /tmp/patch_main.py /app/calibre-web-automated/cps/main.py && rm /tmp
 # Patch layout.html: +1 nav entry
 COPY patch_layout.py /tmp/patch_layout.py
 RUN python3 /tmp/patch_layout.py /app/calibre-web-automated/cps/templates/layout.html && rm /tmp/patch_layout.py
+
+# Patch detail.html: +1 editor button
+COPY patch_detail.py /tmp/patch_detail.py
+RUN python3 /tmp/patch_detail.py /app/calibre-web-automated/cps/templates/detail.html && rm /tmp/patch_detail.py

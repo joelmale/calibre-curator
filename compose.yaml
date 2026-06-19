@@ -8,9 +8,10 @@ volumes:
   calibre_web_config:
   ai_sidecar_state:
   cwa_book_ingest:
+  editor_scratch:
 
 services:
-  calibre-web:
+  calibre-web-automate:
     build:
       context: ./cwa-fork
       dockerfile: Dockerfile
@@ -84,7 +85,25 @@ services:
     networks:
       - homelab-net
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8090/healthz"]
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8090/healthz" ]
       interval: 30s
       timeout: 5s
       retries: 5
+
+  cwa-editor:
+    build:
+      context: ./cwa-editor
+      dockerfile: Dockerfile
+    container_name: calibre-web-editor
+    restart: unless-stopped
+    environment:
+      - TZ=America/New_York
+      - CALIBRE_LIBRARY_ROOT=/calibre-library
+      - EDITOR_SCRATCH_DIR=/state/editor_scratch
+    volumes:
+      - /mnt/books-nas-vol3/calibre:/calibre-library
+      - editor_scratch:/state/editor_scratch
+    expose:
+      - "8091"
+    networks:
+      - homelab-net

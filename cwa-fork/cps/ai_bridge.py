@@ -28,6 +28,7 @@ def _is_admin() -> bool:
 SIDECAR_BASE_URL = os.getenv("AI_SIDECAR_BASE_URL", "http://ai-sidecar:8090").rstrip("/")
 SIDECAR_TOKEN    = os.getenv("AI_SIDECAR_SHARED_TOKEN", "")
 SIDECAR_ENABLED  = os.getenv("AI_SIDECAR_ENABLED", "false").lower() == "true"
+EDITOR_BASE_URL  = os.getenv("AI_EDITOR_BASE_URL", "http://calibre-web-editor:8091").rstrip("/")
 ALLOWED_METHODS  = {"GET", "POST"}
 
 # ── Calibre library config ────────────────────────────────────────────────────
@@ -433,4 +434,49 @@ def proxy_api(subpath: str) -> Response:
         response=sidecar_response.content,
         status=sidecar_response.status_code,
         content_type=sidecar_response.headers.get("Content-Type", "application/json"),
+    )
+
+# ── Editor Proxy ──────────────────────────────────────────────────────────────
+
+@ai_bridge.route("/editor/<int:book_id>/<format>", methods=["GET"])
+@user_login_required
+def editor_page(book_id: int, format: str):
+    if not _is_admin():
+        abort(403)
+    return render_title_template(
+        "ai_dashboard.html",  # Reuses dashboard HTML which mounts our JS
+        title="Edit Book",
+        page="ai-editor",
+        # Pass variables if needed, though frontend can extract from URL
+    )
+
+@ai_bridge.route("/editor/api/<path:subpath>", methods=["GET", "POST", "PUT", "DELETE"])
+@user_login_required
+def proxy_editor_api(subpath: str) -> Response:
+    if not _is_admin():
+        abort(403)
+        
+    url = f"{EDITOR_BASE_URL}/api/v1/{subpath}"
+    
+    # We don't use sidecar_headers because the editor doesn't use the shared token yet.
+    headers = {}
+    if request.content_type:
+        headers["Content-Type"] = request.content_type
+        
+    try:
+        editor_response = requests.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            params=request.args,
+            data=request.get_data(),
+            timeout=120,
+        )
+    except requests.RequestException as exc:
+        return jsonify({"error": "editor_unavailable", "detail": str(exc)}), 503
+
+    return Response(
+        response=editor_response.content,
+        status=editor_response.status_code,
+        content_type=editor_response.headers.get("Content-Type", "application/octet-stream"),
     )
