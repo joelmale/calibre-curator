@@ -2,9 +2,15 @@
 import sys
 
 AI_EDITOR_BTN = """\
-                                    {% if current_user.role_admin() and entry.data|length > 0 %}
-                                        <a href="{{ url_for('ai_bridge.editor_page', book_id=entry.id, format=entry.data[0].format|lower) }}"
-                                           class="btn btn-warning action-icon-btn" role="button" title="Edit Content ({{ entry.data[0].format }})" aria-label="Edit Content">
+                                    {% set valid_formats = [] %}
+                                    {% for format in entry.data %}
+                                        {% if format.format|lower in ['epub', 'azw3'] %}
+                                            {% set _ = valid_formats.append(format) %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if current_user.role_admin() and valid_formats|length > 0 %}
+                                        <a href="{{ url_for('ai_bridge.editor_page', book_id=entry.id, format=valid_formats[0].format|lower) }}"
+                                           class="btn btn-warning action-icon-btn" role="button" title="Edit Content ({{ valid_formats[0].format }})" aria-label="Edit Content">
                                             <span class="glyphicon glyphicon-console"></span>
                                         </a>
                                     {% endif %}\

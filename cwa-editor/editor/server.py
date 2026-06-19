@@ -85,9 +85,16 @@ def create_session():
     os.makedirs(book_dir, exist_ok=True)
     os.makedirs(checkpoints_dir, exist_ok=True)
 
-    resp = call_worker("get_container", {"src": src_path, "work_dir": book_dir})
-    if resp.get("error"):
-        return jsonify({"error": "worker error", "detail": resp["error"]}), 500
+    # Call calibre-debug --explode-book
+    try:
+        proc = subprocess.run(
+            ["/app/calibre/calibre-debug", "--explode-book", src_path, book_dir],
+            capture_output=True, text=True, timeout=60
+        )
+        if proc.returncode != 0:
+            return jsonify({"error": "calibre-debug error", "detail": proc.stderr or proc.stdout}), 500
+    except Exception as e:
+        return jsonify({"error": "subprocess error", "detail": str(e)}), 500
     
     meta = {
         "id": session_id,
@@ -183,9 +190,15 @@ def commit_session(session_id):
     
     out_file = os.path.join(session_dir, f"compiled.{fmt.lower()}")
     
-    resp = call_worker("commit_container", {"work_dir": book_dir, "out_path": out_file})
-    if resp.get("error"):
-        return jsonify({"error": "worker error", "detail": resp["error"]}), 500
+    try:
+        proc = subprocess.run(
+            ["/app/calibre/calibre-debug", "--implode-book", book_dir, out_file],
+            capture_output=True, text=True, timeout=60
+        )
+        if proc.returncode != 0:
+            return jsonify({"error": "calibre-debug implode error", "detail": proc.stderr or proc.stdout}), 500
+    except Exception as e:
+        return jsonify({"error": "subprocess error", "detail": str(e)}), 500
         
     try:
         proc = subprocess.run(
