@@ -160,6 +160,13 @@
         <p>
           <span id="audit-summary" class="text-muted">Loading…</span>
         </p>
+        <div style="margin-bottom: 12px; padding: 10px; background: var(--ai-color-surface-alt, #f9f9f9); border: 1px solid var(--ai-color-border, #ddd); border-radius: 4px;">
+          <strong style="margin-right: 12px;">Flag books with:</strong>
+          <label class="checkbox-inline" style="margin-left:0; margin-right:10px;"><input type="checkbox" id="chk_desc" checked> Missing Description</label>
+          <label class="checkbox-inline" style="margin-right:10px;"><input type="checkbox" id="chk_tags" checked> No Tags</label>
+          <label class="checkbox-inline" style="margin-right:10px;"><input type="checkbox" id="chk_title" checked> Malformed Title</label>
+          <label class="checkbox-inline" style="margin-right:10px;"><input type="checkbox" id="chk_author" checked> Missing Author</label>
+        </div>
         <p>
           <button id="batch-btn" class="btn btn-primary btn-sm">
             Queue top <input id="batch-count" type="number" value="20" min="1" max="100"
@@ -273,7 +280,12 @@
   // ── Audit ─────────────────────────────────────────────────────────────
   function loadAudit() {
     clearError(); showSpinner('Running library health audit…');
-    jget(API_CWA + '/audit?limit=100').then(function (res) {
+    var q = '?limit=100' +
+      '&chk_desc=' + (document.getElementById('chk_desc').checked ? '1' : '0') +
+      '&chk_tags=' + (document.getElementById('chk_tags').checked ? '1' : '0') +
+      '&chk_title=' + (document.getElementById('chk_title').checked ? '1' : '0') +
+      '&chk_author=' + (document.getElementById('chk_author').checked ? '1' : '0');
+    jget(API_CWA + '/audit' + q).then(function (res) {
       hideSpinner();
       if (!res.ok) { showError('Audit error: ' + (res.data.detail || res.data.error)); return; }
       document.getElementById('audit-summary').textContent =
@@ -305,6 +317,10 @@
   }
 
   document.getElementById('audit-refresh').addEventListener('click', loadAudit);
+  ['chk_desc', 'chk_tags', 'chk_title', 'chk_author'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', loadAudit);
+  });
   document.getElementById('batch-btn').addEventListener('click', function () {
     var n = parseInt(document.getElementById('batch-count').value, 10) || 20;
     clearError(); showSpinner('Queueing ' + n + ' books for background generation…');

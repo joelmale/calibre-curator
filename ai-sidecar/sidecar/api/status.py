@@ -102,6 +102,17 @@ def get_status():
     })
 
 
+@status_bp.route("/status/indexed_ids")
+@require_bearer_token
+def get_indexed_ids():
+    """Return a flat list of all calibre_book_ids that are fully indexed."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT calibre_book_id FROM books_ai WHERE ingestion_status = 'indexed'"
+        ).fetchall()
+    return jsonify({"indexed_ids": [int(r["calibre_book_id"]) for r in rows]})
+
+
 @status_bp.route("/status/failures")
 @require_bearer_token
 def get_recent_failures():

@@ -343,6 +343,24 @@ def enrichment_audit():
 
     limit = min(int(request.args.get("limit", 50)), 500)
     
+    # Get toggles (default to 1 if not provided)
+    chk_desc = request.args.get("chk_desc", "1") == "1"
+    chk_tags = request.args.get("chk_tags", "1") == "1"
+    chk_title = request.args.get("chk_title", "1") == "1"
+    chk_author = request.args.get("chk_author", "1") == "1"
+    
+    # We only want to surface books that the AI sidecar has actually indexed!
+    # Otherwise, clicking "Generate" will fail with 400 Bad Request.
+    indexed_ids = set()
+    try:
+        # Request the list of indexed IDs from the sidecar
+        res = _sidecar_get("status/indexed_ids")
+        if res and isinstance(res, tuple) and res[1] == 200:
+            indexed_ids = set(res[0].get("indexed_ids", []))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to fetch indexed_ids from sidecar: {e}")
+
     # Identify books with poor metadata directly from calibre DB
     query = """
         SELECT 
@@ -359,24 +377,29 @@ def enrichment_audit():
         rows = conn.execute(query).fetchall()
         
     for r in rows:
+        book_id = r["bookId"]
+        if book_id not in indexed_ids:
+            continue
+            
         issues = []
-        if not r["description"] or not r["description"].strip():
+        if chk_desc and (not r["description"] or not r["description"].strip()):
             issues.append("Missing description")
-        if r["tag_count"] == 0:
+        if chk_tags and r["tag_count"] == 0:
             issues.append("No tags")
             
         title = r["title"] or ""
-        if "_" in title or ".epub" in title.lower() or ".azw3" in title.lower() or "-" in title:
-            issues.append("Malformed title")
-        elif title.isupper() and len(title) > 4:
-            issues.append("Title in ALL CAPS")
-            
-        if not r["authorSort"] or r["authorSort"].lower() in ["unknown", "anonymous"]:
+        if chk_title:
+            if "_" in title or ".epub" in title.lower() or ".azw3" in title.lower() or "-" in title:
+                issues.append("Malformed title")
+            elif title.isupper() and len(title) > 4:
+                issues.append("Title in ALL CAPS")
+                
+        if chk_author and (not r["authorSort"] or r["authorSort"].lower() in ["unknown", "anonymous"]):
             issues.append("Missing author")
             
         if issues:
             results.append({
-                "bookId": r["bookId"],
+                "bookId": book_id,
                 "title": title,
                 "authorSort": r["authorSort"] or "",
                 "issues": issues,
