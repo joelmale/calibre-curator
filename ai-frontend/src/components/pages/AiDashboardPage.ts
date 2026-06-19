@@ -81,14 +81,19 @@ export class AiDashboardPage {
       ? progressResult.data
       : { phase: "idle" as const, total_to_process: 0, current_index: 0, current_book_id: null, current_title: null, chunks_embedded_so_far: 0, chunks_total: 0 };
 
-    // ── Engine monitor panel ────────────────────────────────────────────────
-    const enginePanel = this.buildEngineMonitor(status, progress);
-    holder.appendChild(enginePanel);
+    const grid = document.createElement("div");
+    grid.className = "ai-dashboard-grid";
 
     // ── Status panel (library + embedding) ──────────────────────────────────
     const sp = createAiStatusPanel(status);
     this.statusPanel = sp;
-    holder.appendChild(sp);
+    grid.appendChild(sp);
+
+    // ── Engine monitor panel ────────────────────────────────────────────────
+    const em = this.buildEngineMonitor(status, progress);
+    grid.appendChild(em);
+
+    holder.appendChild(grid);
 
     // Show recent failures panel (only if there are any)
     if (failuresResult.ok && failuresResult.data.failures.length > 0) {

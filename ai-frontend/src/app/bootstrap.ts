@@ -1,5 +1,6 @@
 import { API_BASE } from "./environment";
 import { initTheme } from "./theme";
+import { initTelemetryModal } from "../components/organisms/AiTelemetryModal";
 import { HttpClient } from "../api/httpClient";
 import { AiApiClient } from "../api/aiClient";
 import { AiDashboardPage } from "../components/pages/AiDashboardPage";
@@ -8,6 +9,7 @@ import { AiSequencePage } from "../components/pages/AiSequencePage";
 
 // Apply theme tokens before any rendering to avoid flash-of-wrong-theme.
 initTheme();
+initTelemetryModal(API_BASE);
 
 const http = new HttpClient(API_BASE);
 const client = new AiApiClient(http);

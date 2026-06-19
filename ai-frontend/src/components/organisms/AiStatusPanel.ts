@@ -10,7 +10,7 @@ import {
 
 export function createAiStatusPanel(s: IAiStatusResponse): HTMLElement {
   const wrapper = document.createElement("div");
-  wrapper.className = "row ai-status-panel";
+  wrapper.className = "ai-status-panel";
 
   // ── Library panel ──────────────────────────────────────────────────────────
   const indexedPct =
@@ -129,16 +129,8 @@ export function createAiStatusPanel(s: IAiStatusResponse): HTMLElement {
   embContainer.appendChild(embFrag);
   const embeddingPanel = _panel("Embedding & Ingestion", embContainer);
 
-  const libCol = document.createElement("div");
-  libCol.className = "col-sm-6";
-  libCol.appendChild(libraryPanel);
-
-  const embCol = document.createElement("div");
-  embCol.className = "col-sm-6";
-  embCol.appendChild(embeddingPanel);
-
-  wrapper.appendChild(libCol);
-  wrapper.appendChild(embCol);
+  wrapper.appendChild(libraryPanel);
+  wrapper.appendChild(embeddingPanel);
   return wrapper;
 }
 

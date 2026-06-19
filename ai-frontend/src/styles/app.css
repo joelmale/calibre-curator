@@ -272,3 +272,19 @@
 .ai-badge {
   font-size: 11px;
 }
+
+/* Dashboard Layout Grid */
+.ai-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+}
+@media (min-width: 1200px) {
+  .ai-dashboard-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.ai-status-panel {
+  display: contents;
+}
