@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 
-from .chat import ChatClient, ChatError, parse_json_object, _DEFAULT_TIMEOUT
+from .chat import ChatClient, ChatError, ChatResponse, parse_json_object, _DEFAULT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class OpenAICompatChatClient(ChatClient):
         schema: dict[str, Any] | None = None,
         temperature: float = 0.2,
         timeout: int = _DEFAULT_TIMEOUT,
-    ) -> dict[str, Any]:
+    ) -> ChatResponse:
         payload = {
             "model": self._model,
             "messages": [
@@ -73,11 +73,19 @@ class OpenAICompatChatClient(ChatClient):
             raise ChatError(f"{self._label}: request failed ({resp.status_code}): {exc}") from exc
 
         try:
-            content = resp.json()["choices"][0]["message"]["content"]
+            resp_json = resp.json()
+            content = resp_json["choices"][0]["message"]["content"]
+            usage = resp_json.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens")
+            completion_tokens = usage.get("completion_tokens")
         except (KeyError, IndexError, ValueError) as exc:
             raise ChatError(f"{self._label}: unexpected response shape: {exc}") from exc
 
-        return parse_json_object(content)
+        return ChatResponse(
+            data=parse_json_object(content),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
 
 
 class AnthropicChatClient(ChatClient):
@@ -103,7 +111,7 @@ class AnthropicChatClient(ChatClient):
         schema: dict[str, Any] | None = None,
         temperature: float = 0.2,  # accepted for interface parity; not sent
         timeout: int = _DEFAULT_TIMEOUT,
-    ) -> dict[str, Any]:
+    ) -> ChatResponse:
         payload = {
             "model": self._model,
             "max_tokens": 2048,
@@ -140,7 +148,13 @@ class AnthropicChatClient(ChatClient):
             for block in data.get("content", [])
             if block.get("type") == "text"
         )
-        return parse_json_object(text)
+        usage = data.get("usage", {})
+        
+        return ChatResponse(
+            data=parse_json_object(text),
+            prompt_tokens=usage.get("input_tokens"),
+            completion_tokens=usage.get("output_tokens"),
+        )
 
 
 class GeminiChatClient(ChatClient):
@@ -164,7 +178,7 @@ class GeminiChatClient(ChatClient):
         schema: dict[str, Any] | None = None,
         temperature: float = 0.2,
         timeout: int = _DEFAULT_TIMEOUT,
-    ) -> dict[str, Any]:
+    ) -> ChatResponse:
         url = f"{self._BASE}/models/{self._model}:generateContent?key={self._api_key}"
         gen_config: dict[str, Any] = {
             "responseMimeType": "application/json",
@@ -197,10 +211,15 @@ class GeminiChatClient(ChatClient):
         try:
             data = resp.json()
             text = data["candidates"][0]["content"]["parts"][0]["text"]
+            usage = data.get("usageMetadata", {})
         except (KeyError, IndexError, ValueError) as exc:
             raise ChatError(f"gemini: unexpected response shape: {exc}") from exc
 
-        return parse_json_object(text)
+        return ChatResponse(
+            data=parse_json_object(text),
+            prompt_tokens=usage.get("promptTokenCount"),
+            completion_tokens=usage.get("candidatesTokenCount"),
+        )
 
 
 class FallbackChatClient(ChatClient):
@@ -231,7 +250,7 @@ class FallbackChatClient(ChatClient):
         schema: dict[str, Any] | None = None,
         temperature: float = 0.2,
         timeout: int = _DEFAULT_TIMEOUT,
-    ) -> dict[str, Any]:
+    ) -> ChatResponse:
         last_error: ChatError | None = None
         attempted = False
         for client in self._clients:
@@ -248,6 +267,7 @@ class FallbackChatClient(ChatClient):
                     temperature=temperature, timeout=timeout,
                 )
                 self._last_model = client.model_name
+                self.provider_key = client.provider_key
                 return result
             except ChatError as exc:
                 logger.warning(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any
 
 import requests
@@ -44,6 +45,13 @@ def parse_json_object(content: str) -> dict[str, Any]:
     return parsed
 
 
+@dataclass
+class ChatResponse:
+    data: dict[str, Any]
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+
 class ChatClient(ABC):
     """A provider-agnostic structured-JSON chat client.
 
@@ -67,7 +75,7 @@ class ChatClient(ABC):
         schema: dict[str, Any] | None = None,
         temperature: float = 0.2,
         timeout: int = _DEFAULT_TIMEOUT,
-    ) -> dict[str, Any]: ...
+    ) -> ChatResponse: ...
 
 
 class OllamaChatClient(ChatClient):
@@ -93,7 +101,7 @@ class OllamaChatClient(ChatClient):
         schema: dict[str, Any] | None = None,
         temperature: float = 0.2,
         timeout: int = _DEFAULT_TIMEOUT,
-    ) -> dict[str, Any]:
+    ) -> ChatResponse:
         fmt: Any = schema if schema is not None else "json"
         payload = {
             "model": self._model,
@@ -132,8 +140,15 @@ class OllamaChatClient(ChatClient):
             raise ChatError(f"Ollama chat request failed: {exc}") from exc
 
         try:
-            content = resp.json()["message"]["content"]
+            resp_json = resp.json()
+            content = resp_json["message"]["content"]
+            prompt_tokens = resp_json.get("prompt_eval_count")
+            completion_tokens = resp_json.get("eval_count")
         except (KeyError, ValueError) as exc:
             raise ChatError(f"Unexpected Ollama chat response shape: {exc}") from exc
 
-        return parse_json_object(content)
+        return ChatResponse(
+            data=parse_json_object(content),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )

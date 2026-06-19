@@ -415,6 +415,20 @@ def enrichment_audit():
     })
 
 
+def _sidecar_get(subpath: str, params: dict | None = None) -> tuple[dict, int]:
+    """Helper to make internal GET requests to the sidecar."""
+    try:
+        resp = requests.get(
+            f"{SIDECAR_BASE_URL}/api/v1/{subpath}",
+            headers=_sidecar_headers(),
+            params=params,
+            timeout=10,
+        )
+        return resp.json(), resp.status_code
+    except requests.RequestException as exc:
+        return {"error": "sidecar_unavailable", "detail": str(exc)}, 503
+
+
 def _sidecar_post(subpath: str, payload: dict) -> tuple[dict, int]:
     """POST JSON to the sidecar API and return (json, status)."""
     url = f"{SIDECAR_BASE_URL}/api/v1/{subpath}"

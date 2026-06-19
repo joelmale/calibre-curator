@@ -71,6 +71,10 @@ def create_session():
     if not book_id or not fmt:
         return jsonify({"error": "book_id and format required"}), 400
     
+    fmt = fmt.upper()
+    if fmt not in ("EPUB", "AZW3", "KEPUB"):
+        return jsonify({"error": f"Editing format {fmt} is not supported. Please convert to EPUB or AZW3 first."}), 400
+    
     try:
         book_id = int(book_id)
         src_path = _get_book_path(book_id, fmt)
@@ -151,7 +155,6 @@ def handle_file(session_id):
         return jsonify({"error": "invalid name"}), 400
         
     file_path = os.path.join(book_dir, name)
-    
     if request.method == 'GET':
         if not os.path.exists(file_path):
             return jsonify({"error": "file not found"}), 404
@@ -172,6 +175,75 @@ def handle_file(session_id):
             json.dump(meta, f)
             
         return jsonify({"ok": True})
+        
+    elif request.method == 'DELETE':
+        if not os.path.exists(file_path):
+            return jsonify({"error": "file not found"}), 404
+            
+        if os.path.isdir(file_path):
+            shutil.rmtree(file_path)
+        else:
+            os.remove(file_path)
+            
+        meta_path = os.path.join(session_dir, "session.json")
+        with open(meta_path, "r+") as f:
+            meta = json.load(f)
+            meta["dirty"] = True
+            f.seek(0)
+            f.truncate()
+            json.dump(meta, f)
+            
+        return jsonify({"ok": True})
+        
+@app.route('/api/v1/sessions/<session_id>/rename', methods=['POST'])
+def rename_file(session_id):
+    session_dir = os.path.join(SCRATCH_DIR, session_id)
+    book_dir = os.path.join(session_dir, "book")
+    if not os.path.exists(book_dir):
+        return jsonify({"error": "session not found"}), 404
+        
+    body = request.get_json() or {}
+    old_name = body.get('old_name')
+    new_name = body.get('new_name')
+    
+    if not old_name or not new_name or '..' in old_name or '..' in new_name:
+        return jsonify({"error": "invalid names"}), 400
+        
+    old_path = os.path.join(book_dir, old_name)
+    new_path = os.path.join(book_dir, new_name)
+    
+    if not os.path.exists(old_path):
+        return jsonify({"error": "file not found"}), 404
+        
+    os.makedirs(os.path.dirname(new_path), exist_ok=True)
+    os.rename(old_path, new_path)
+    
+    meta_path = os.path.join(session_dir, "session.json")
+    with open(meta_path, "r+") as f:
+        meta = json.load(f)
+        meta["dirty"] = True
+        f.seek(0)
+        f.truncate()
+        json.dump(meta, f)
+        
+    return jsonify({"ok": True})
+
+@app.route('/api/v1/sessions/<session_id>/preview/<path:name>', methods=['GET'])
+def preview_file(session_id, name):
+    session_dir = os.path.join(SCRATCH_DIR, session_id)
+    book_dir = os.path.join(session_dir, "book")
+    if not os.path.exists(book_dir):
+        return "Session not found", 404
+        
+    if '..' in name:
+        return "Invalid name", 400
+        
+    file_path = os.path.join(book_dir, name)
+    if not os.path.exists(file_path):
+        return "File not found", 404
+        
+    # send_file guesses mime types based on extension, which is usually correct
+    return send_file(file_path)
 
 @app.route('/api/v1/sessions/<session_id>/commit', methods=['POST'])
 def commit_session(session_id):

@@ -6,7 +6,7 @@ import requests
 
 from ..config import get_config
 from ..db.calibre_reader import CalibreReader
-from ..db.repositories import BookAiRepository, IngestionRunRepository
+from ..db.repositories import BookAiRepository, IngestionRunRepository, TelemetryRepository
 from ..db.session import get_db
 from ..security import require_bearer_token
 
@@ -129,4 +129,15 @@ def get_recent_failures():
             }
             for r in rows
         ]
+    })
+
+
+@status_bp.route("/status/telemetry")
+@require_bearer_token
+def get_telemetry():
+    """Return aggregated AI request statistics."""
+    with get_db() as conn:
+        rows = TelemetryRepository.get_stats(conn)
+    return jsonify({
+        "stats": [dict(r) for r in rows]
     })

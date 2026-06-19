@@ -673,3 +673,56 @@ class IngestionRunRepository:
             "embeddedChunks": row["embedded_chunks"],
             "errorCount":     row["error_count"],
         }
+
+class TelemetryRepository:
+    """Stores and retrieves AI API request logs for the telemetry dashboard."""
+
+    @staticmethod
+    def log_request(
+        conn: sqlite3.Connection,
+        provider: str,
+        model: str,
+        endpoint_type: str,
+        duration_ms: int,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        is_error: bool = False,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO ai_request_logs (
+                provider, model, endpoint_type, duration_ms,
+                prompt_tokens, completion_tokens, is_error
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                provider,
+                model,
+                endpoint_type,
+                duration_ms,
+                prompt_tokens,
+                completion_tokens,
+                1 if is_error else 0,
+            ),
+        )
+
+    @staticmethod
+    def get_stats(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+        return conn.execute(
+            """
+            SELECT 
+                provider, 
+                model, 
+                endpoint_type,
+                COUNT(*) as total_requests,
+                SUM(is_error) as error_requests,
+                SUM(prompt_tokens) as total_prompt_tokens,
+                SUM(completion_tokens) as total_completion_tokens,
+                MIN(duration_ms) as min_duration_ms,
+                MAX(duration_ms) as max_duration_ms,
+                AVG(duration_ms) as avg_duration_ms
+            FROM ai_request_logs
+            GROUP BY provider, model, endpoint_type
+            ORDER BY total_requests DESC
+            """
+        ).fetchall()

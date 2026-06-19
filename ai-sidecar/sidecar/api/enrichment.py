@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 
 from flask import Blueprint, jsonify, request
 
 from ..ai import ChatError, get_chat_client
 from ..config import get_config
-from ..db.repositories import EnrichmentRepository
+from ..db.repositories import EnrichmentRepository, TelemetryRepository
 from ..db.session import get_db
 from ..security import require_bearer_token
 
@@ -105,12 +106,37 @@ def _generate_for_book(conn, config, chat, calibre_book_id: int) -> dict:
     if not text.strip():
         raise ValueError("no extracted text available for this book")
 
-    raw = chat.chat_json(
-        _SYSTEM_PROMPT,
-        _build_user_prompt(book["title"], book["author_sort"] or "", text),
-        schema=_SUGGESTION_SCHEMA,
-    )
-    suggestion = _coerce_suggestion(raw)
+    start_t = time.perf_counter()
+    try:
+        resp = chat.chat_json(
+            _SYSTEM_PROMPT,
+            _build_user_prompt(book["title"], book["author_sort"] or "", text),
+            schema=_SUGGESTION_SCHEMA,
+        )
+        duration_ms = int((time.perf_counter() - start_t) * 1000)
+        TelemetryRepository.log_request(
+            conn,
+            provider=chat.provider_key,
+            model=chat.model_name,
+            endpoint_type="chat",
+            duration_ms=duration_ms,
+            prompt_tokens=resp.prompt_tokens,
+            completion_tokens=resp.completion_tokens,
+            is_error=False,
+        )
+    except Exception as exc:
+        duration_ms = int((time.perf_counter() - start_t) * 1000)
+        TelemetryRepository.log_request(
+            conn,
+            provider=chat.provider_key,
+            model=chat.model_name,
+            endpoint_type="chat",
+            duration_ms=duration_ms,
+            is_error=True,
+        )
+        raise exc
+
+    suggestion = _coerce_suggestion(resp.data)
 
     EnrichmentRepository.upsert_suggestion(
         conn,
