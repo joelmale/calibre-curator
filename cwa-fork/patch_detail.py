@@ -10,7 +10,7 @@ AI_EDITOR_BTN = """\
                                     {% endfor %}
                                     {% if current_user.role_admin() and valid_formats|length > 0 %}
                                         <a href="{{ url_for('ai_bridge.editor_page', book_id=entry.id, format=valid_formats[0].format|lower) }}"
-                                           class="btn btn-warning action-icon-btn" role="button" title="Edit Content ({{ valid_formats[0].format }})" aria-label="Edit Content">
+                                           class="btn btn-primary action-icon-btn" role="button" title="Edit Content ({{ valid_formats[0].format }})" aria-label="Edit Content">
                                             <span class="glyphicon glyphicon-console"></span>
                                         </a>
                                     {% endif %}\
