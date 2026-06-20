@@ -11,7 +11,7 @@
 <nav id="ai-nav-root" class="ai-nav" aria-label="AI Curator navigation"
      data-dashboard-url="{{ url_for('ai_bridge.dashboard') }}"
      data-ai-theme="{{ 'dark' if g.current_theme == 1 else 'light' }}">
-  <ul class="nav nav-tabs" style="border-bottom:none">
+  <ul class="ai-segmented-nav">
 
     <li role="presentation" data-spa-tab="" class="{{ 'active' if page == 'ai-dashboard' }}">
       <a href="{{ url_for('ai_bridge.dashboard') }}">
@@ -34,7 +34,9 @@
       </a>
     </li>
 
-    <li role="presentation" class="pull-right">
+    <div class="ai-segmented-nav-spacer"></div>
+
+    <li role="presentation">
       <a href="#" id="ai-telemetry-btn" data-toggle="modal" data-target="#ai-telemetry-modal">
         <span class="glyphicon glyphicon-dashboard" aria-hidden="true"></span>
         &nbsp;AI Telemetry

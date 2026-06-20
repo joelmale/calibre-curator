@@ -82,50 +82,89 @@
   color: var(--ai-color-text-muted) !important;
 }
 
-/* ── Nav bar ────────────────────────────────────────────────────────────────── */
+/* ── Modern Segmented Nav Bar (Pills) ───────────────────────────────────────── */
 #ai-nav-root.ai-nav {
-  background: var(--ai-color-nav-bg);
-  border-bottom: 1px solid var(--ai-color-nav-border);
-  margin-bottom: 20px;
-  padding: 0 4px;
+  margin-bottom: var(--ai-spacing-lg);
+  display: flex;
+  justify-content: center; /* Center the pill bar */
 }
 
-#ai-nav-root .nav-tabs > li > a {
-  color: var(--ai-color-nav-text);
-  background-color: transparent;
-  border-color: transparent;
+.ai-segmented-nav {
+  display: inline-flex;
+  align-items: center;
+  background: var(--ai-color-surface-alt);
+  border: 1px solid var(--ai-color-border);
+  border-radius: 9999px; /* full pill shape */
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  list-style: none;
+  margin: 0;
 }
-#ai-nav-root .nav-tabs > li > a:hover,
-#ai-nav-root .nav-tabs > li > a:focus {
+
+.ai-segmented-nav > li {
+  margin: 0;
+  padding: 0;
+  display: inline-block;
+}
+
+.ai-segmented-nav > li > a {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  color: var(--ai-color-text-muted);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+  border: none;
+  font-size: 14px;
+}
+
+.ai-segmented-nav > li > a:hover {
   color: var(--ai-color-text);
   background-color: var(--ai-color-nav-hover-bg);
-  border-color: var(--ai-color-border);
 }
-#ai-nav-root .nav-tabs > li.active > a,
-#ai-nav-root .nav-tabs > li.active > a:hover,
-#ai-nav-root .nav-tabs > li.active > a:focus {
-  color: var(--ai-color-text);
-  background-color: var(--ai-color-surface);
-  border-color: var(--ai-color-border);
-  border-bottom-color: var(--ai-color-surface);
+
+.ai-segmented-nav > li.active > a,
+.ai-segmented-nav > li.active > a:hover,
+.ai-segmented-nav > li.active > a:focus {
+  background-color: var(--ai-color-primary);
+  color: var(--ai-color-primary-text);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Dropdown menu in the nav */
-#ai-nav-root .dropdown-menu {
+.ai-segmented-nav .dropdown-menu {
   background-color: var(--ai-color-surface);
   border-color: var(--ai-color-border);
+  border-radius: var(--ai-radius);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  margin-top: 8px;
 }
-#ai-nav-root .dropdown-menu > li > a {
-  color: var(--ai-color-nav-text);
+.ai-segmented-nav .dropdown-menu > li > a {
+  color: var(--ai-color-text);
+  padding: 8px 16px;
 }
-#ai-nav-root .dropdown-menu > li > a:hover,
-#ai-nav-root .dropdown-menu > li.active > a {
+.ai-segmented-nav .dropdown-menu > li > a:hover,
+.ai-segmented-nav .dropdown-menu > li.active > a {
   background-color: var(--ai-color-nav-hover-bg);
   color: var(--ai-color-text);
 }
-#ai-nav-root .dropdown-menu .text-muted {
+.ai-segmented-nav .dropdown-menu .text-muted {
   color: var(--ai-color-text-muted) !important;
 }
+
+/* Push telemetry to the right if needed, though in flex it might be better handled explicitly */
+.ai-segmented-nav-spacer {
+  width: 2px;
+  height: 24px;
+  background-color: var(--ai-color-border);
+  margin: 0 8px;
+}
+
 
 /* ── Dashboard heading ──────────────────────────────────────────────────────── */
 .ai-dashboard__heading {
