@@ -23,5 +23,10 @@ WORKDIR /app/cwa-editor
 # The flask app will listen on 8091
 EXPOSE 8091
 
+# Replace the base image's healthcheck (which probes :8083, not served here).
+# No -f: any HTTP response (even a 404) means Flask is up.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+  CMD curl -s -o /dev/null http://localhost:8091/ || exit 1
+
 # Override the base image's entrypoint to run our start script
 ENTRYPOINT ["/app/cwa-editor/start.sh"]

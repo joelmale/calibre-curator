@@ -10,5 +10,5 @@ echo "Starting Flask API server..."
 export FLASK_APP=/app/cwa-editor/editor/server.py
 export FLASK_RUN_HOST=0.0.0.0
 export FLASK_RUN_PORT=8091
-export FLASK_DEBUG=1
+export FLASK_DEBUG="${FLASK_DEBUG:-0}"
 exec python3 -m flask run
